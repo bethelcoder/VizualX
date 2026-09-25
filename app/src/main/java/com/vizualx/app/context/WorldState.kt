@@ -18,39 +18,38 @@ data class WorldStateSnapshot(
 )
 
 class WorldState(
-    private val ttlMillis: Long = 8000L
+    private val ttlMillis: Long = 8000L,
+    private val timeProvider: () -> Long = { System.currentTimeMillis() }
 ) {
     private val observations = ConcurrentHashMap<String, Observation>()
     private val _snapshot = MutableStateFlow(WorldStateSnapshot())
     val snapshot: StateFlow<WorldStateSnapshot> = _snapshot.asStateFlow()
 
-    fun updateObservation(observation: Observation) {
-        pruneExpired()
+    fun updateObservation(observation: Observation, now: Long = timeProvider()) {
+        pruneExpired(now)
         observations[observation.id] = observation
-        publishSnapshot()
+        publishSnapshot(now)
     }
 
-    fun getActiveObservations(): List<Observation> {
-        pruneExpired()
+    fun getActiveObservations(now: Long = timeProvider()): List<Observation> {
+        pruneExpired(now)
         return observations.values.toList()
     }
 
-    fun pruneExpired(now: Long = System.currentTimeMillis()) {
+    fun pruneExpired(now: Long = timeProvider()) {
         val cutoff = now - ttlMillis
         observations.entries.removeIf { it.value.timestampMs < cutoff }
     }
 
     fun clear() {
         observations.clear()
-        _snapshot.value = WorldStateSnapshot()
+        _snapshot.value = WorldStateSnapshot(timestampMs = timeProvider())
     }
 
-    private fun publishSnapshot() {
-        val now = System.currentTimeMillis()
+    private fun publishSnapshot(now: Long = timeProvider()) {
         val all = observations.values.toList()
 
         val front = all.filterIsInstance<ObjectObservation>()
-            .filter { it.source == ObservationSource.FRONT_CAMERA || it.source == ObservationSource.REAR_CAMERA }
             .filter { it.source == ObservationSource.REAR_CAMERA } // Phone rear camera is "Ahead"
         val rear = all.filterIsInstance<ObjectObservation>()
             .filter { it.source == ObservationSource.FRONT_CAMERA } // Phone front camera faces user/behind

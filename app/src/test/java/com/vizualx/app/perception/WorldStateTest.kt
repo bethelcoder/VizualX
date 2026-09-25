@@ -13,8 +13,8 @@ class WorldStateTest {
 
     @Test
     fun `world state retains active observations and prunes expired items`() {
-        val worldState = WorldState(ttlMillis = 5000L)
-        val now = 10000L
+        val mockTime = 10000L
+        val worldState = WorldState(ttlMillis = 5000L, timeProvider = { mockTime })
 
         val recentObs = ObjectObservation(
             id = "obs-recent",
@@ -34,11 +34,11 @@ class WorldStateTest {
             position = RelativePosition.LEFT
         )
 
-        worldState.updateObservation(recentObs)
-        worldState.updateObservation(expiredObs)
+        worldState.updateObservation(recentObs, now = mockTime)
+        worldState.updateObservation(expiredObs, now = mockTime)
 
-        worldState.pruneExpired(now)
-        val active = worldState.getActiveObservations()
+        worldState.pruneExpired(now = mockTime)
+        val active = worldState.getActiveObservations(now = mockTime)
 
         assertEquals(1, active.size)
         assertEquals("obs-recent", active.first().id)

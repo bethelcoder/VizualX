@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
@@ -29,14 +30,13 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -363,7 +363,7 @@ fun SpokenBanner(lastSpoken: String?, assistantState: VoiceAssistantState) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.VolumeUp,
+                imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                 contentDescription = "Voice Output",
                 tint = CyanPrimary,
                 modifier = Modifier.size(20.dp)
@@ -613,7 +613,7 @@ fun DiagnosticsDialog(
                 Text("Device: ${report.manufacturer} ${report.deviceModel}", color = TextPrimary)
                 Text("Android: ${report.androidVersion} (API ${report.apiLevel})", color = TextSecondary)
                 Spacer(modifier = Modifier.height(8.dp))
-                Divider(color = BorderSubtle)
+                HorizontalDivider(color = BorderSubtle)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "Concurrent Camera Support:",
