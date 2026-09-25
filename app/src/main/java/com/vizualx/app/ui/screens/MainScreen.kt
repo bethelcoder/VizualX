@@ -1,7 +1,6 @@
 package com.vizualx.app.ui.screens
 
 import androidx.camera.view.PreviewView
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,14 +22,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -47,7 +44,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -85,7 +81,6 @@ fun MainScreen(
     isAssistanceActive: Boolean,
     onToggleAssistance: () -> Unit,
     cameraMode: ActiveCameraMode,
-    onFlipCamera: () -> Unit,
     assistantStateFlow: StateFlow<VoiceAssistantState>,
     lastSpokenFlow: StateFlow<String?>,
     audioDbFlow: StateFlow<Float>,
@@ -93,7 +88,8 @@ fun MainScreen(
     capabilityReport: DeviceCapabilityReport?,
     onSimulate: (ObjectType, RelativePosition, Float, String) -> Unit,
     onVoiceQueryClick: () -> Unit,
-    onPreviewViewCreated: (PreviewView) -> Unit
+    onRearPreviewViewCreated: (PreviewView) -> Unit,
+    onFrontPreviewViewCreated: (PreviewView) -> Unit
 ) {
     val assistantState by assistantStateFlow.collectAsState()
     val lastSpoken by lastSpokenFlow.collectAsState()
@@ -118,13 +114,13 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Multimodal Camera + Audio Monitor
-            CameraAudioMonitor(
+            // Dual-Stream Multimodal Monitor (Front + Rear Concurrent)
+            DualCameraAudioMonitor(
                 cameraMode = cameraMode,
                 audioDb = audioDb,
                 isAssistanceActive = isAssistanceActive,
-                onFlipCamera = onFlipCamera,
-                onPreviewViewCreated = onPreviewViewCreated
+                onRearPreviewViewCreated = onRearPreviewViewCreated,
+                onFrontPreviewViewCreated = onFrontPreviewViewCreated
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -228,123 +224,170 @@ fun HeaderSection(
 }
 
 @Composable
-fun CameraAudioMonitor(
+fun DualCameraAudioMonitor(
     cameraMode: ActiveCameraMode,
     audioDb: Float,
     isAssistanceActive: Boolean,
-    onFlipCamera: () -> Unit,
-    onPreviewViewCreated: (PreviewView) -> Unit
+    onRearPreviewViewCreated: (PreviewView) -> Unit,
+    onFrontPreviewViewCreated: (PreviewView) -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(200.dp),
+            .height(210.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = DarkSurface),
         border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            if (isAssistanceActive) {
-                AndroidView(
-                    factory = { ctx ->
-                        PreviewView(ctx).apply {
-                            onPreviewViewCreated(this)
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(DarkSurface),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Camera & Audio Inactive\nTap 'Start Perception' to begin",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                }
-            }
-
-            // Top Status Overlay
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Dual Viewports Row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .weight(1f)
                     .padding(8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Box(
+                // Viewport 1: REAR CAMERA (Ahead)
+                Card(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Black.copy(alpha = 0.7f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .weight(1f)
+                        .fillMaxSize(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = DarkSurfaceHighlight),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CyanPrimary.copy(alpha = 0.4f))
                 ) {
-                    Text(
-                        text = when (cameraMode) {
-                            ActiveCameraMode.REAR_AHEAD -> "CAM: REAR (Ahead)"
-                            ActiveCameraMode.FRONT_BEHIND -> "CAM: FRONT (Behind)"
-                            ActiveCameraMode.DUAL_CONCURRENT -> "CAM: DUAL CONCURRENT"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = CyanPrimary
-                    )
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        if (isAssistanceActive) {
+                            AndroidView(
+                                factory = { ctx ->
+                                    PreviewView(ctx).apply {
+                                        onRearPreviewViewCreated(this)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Ahead Cam",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+
+                        // Badge
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(6.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.Black.copy(alpha = 0.75f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "REAR • Ahead",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                color = CyanPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
 
-                IconButton(
-                    onClick = onFlipCamera,
+                // Viewport 2: FRONT CAMERA (Behind)
+                Card(
                     modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.7f))
+                        .weight(1f)
+                        .fillMaxSize(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = DarkSurfaceHighlight),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, VioletSecondary.copy(alpha = 0.4f))
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Cameraswitch,
-                        contentDescription = "Switch Camera",
-                        tint = TextPrimary,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        if (isAssistanceActive) {
+                            AndroidView(
+                                factory = { ctx ->
+                                    PreviewView(ctx).apply {
+                                        onFrontPreviewViewCreated(this)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Behind Cam",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+
+                        // Badge
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(6.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.Black.copy(alpha = 0.75f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "FRONT • Behind",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                color = VioletSecondary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
 
-            // Bottom Audio Level Bar Overlay
-            if (isAssistanceActive) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomStart)
-                        .background(Color.Black.copy(alpha = 0.7f))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+            // Audio & Stream Status Bar
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(DarkSurfaceHighlight)
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "MIC INPUT (16kHz)",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextSecondary
-                        )
-                        Text(
-                            text = "${audioDb.toInt()} dB",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (audioDb > 70f) HazardCritical else CyanPrimary
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    LinearProgressIndicator(
-                        progress = { (audioDb / 90f).coerceIn(0f, 1f) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp)),
-                        color = if (audioDb > 70f) HazardCritical else CyanPrimary,
-                        trackColor = BorderSubtle,
+                    Text(
+                        text = if (cameraMode == ActiveCameraMode.DUAL_CONCURRENT) {
+                            "⚡ DUAL CONCURRENT ACTIVE"
+                        } else {
+                            "● PRIMARY AHEAD STREAM ACTIVE"
+                        },
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = if (cameraMode == ActiveCameraMode.DUAL_CONCURRENT) CyanPrimary else TextSecondary
+                    )
+                    Text(
+                        text = "MIC: ${audioDb.toInt()} dB",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (audioDb > 70f) HazardCritical else CyanPrimary
                     )
                 }
+                Spacer(modifier = Modifier.height(4.dp))
+                LinearProgressIndicator(
+                    progress = { (audioDb / 90f).coerceIn(0f, 1f) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp)),
+                    color = if (audioDb > 70f) HazardCritical else CyanPrimary,
+                    trackColor = BorderSubtle,
+                )
             }
         }
     }

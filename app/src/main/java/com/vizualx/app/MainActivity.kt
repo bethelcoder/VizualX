@@ -8,7 +8,6 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.CameraSelector
 import androidx.camera.view.PreviewView
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -26,6 +25,7 @@ import com.vizualx.app.camera.DeviceCapabilityReport
 import com.vizualx.app.context.ContextEvent
 import com.vizualx.app.context.EventPriority
 import com.vizualx.app.perception.PerceptionEngine
+import com.vizualx.app.perception.models.ObservationSource
 import com.vizualx.app.services.ForegroundPerceptionService
 import com.vizualx.app.speech.SpeechManager
 import com.vizualx.app.ui.screens.MainScreen
@@ -44,9 +44,11 @@ class MainActivity : ComponentActivity() {
 
     private var capabilityReport: DeviceCapabilityReport? by mutableStateOf(null)
     private var isAssistanceActive by mutableStateOf(false)
-    private var activeCameraMode by mutableStateOf(ActiveCameraMode.REAR_AHEAD)
+    private var activeCameraMode by mutableStateOf(ActiveCameraMode.DUAL_CONCURRENT)
     private val recentEvents = mutableStateListOf<ContextEvent>()
-    private var activePreviewView: PreviewView? = null
+
+    private var rearPreviewView: PreviewView? = null
+    private var frontPreviewView: PreviewView? = null
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -113,9 +115,6 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     cameraMode = activeCameraMode,
-                    onFlipCamera = {
-                        toggleCameraFacing()
-                    },
                     assistantStateFlow = speechManager.assistantState,
                     lastSpokenFlow = speechManager.lastSpoken,
                     audioDbFlow = audioCapture.amplitudeFlow,
@@ -132,10 +131,16 @@ class MainActivity : ComponentActivity() {
                     onVoiceQueryClick = {
                         speechManager.startListening()
                     },
-                    onPreviewViewCreated = { previewView ->
-                        activePreviewView = previewView
+                    onRearPreviewViewCreated = { view ->
+                        rearPreviewView = view
                         if (isAssistanceActive) {
-                            bindCameraToPreview(previewView)
+                            bindCameras()
+                        }
+                    },
+                    onFrontPreviewViewCreated = { view ->
+                        frontPreviewView = view
+                        if (isAssistanceActive) {
+                            bindCameras()
                         }
                     }
                 )
@@ -168,7 +173,7 @@ class MainActivity : ComponentActivity() {
         ForegroundPerceptionService.startService(this)
         audioCapture.startCapture()
 
-        activePreviewView?.let { bindCameraToPreview(it) }
+        bindCameras()
         speechManager.speak("VizualX perception active.", EventPriority.HIGH)
     }
 
@@ -180,30 +185,25 @@ class MainActivity : ComponentActivity() {
         speechManager.speak("VizualX paused.", EventPriority.NORMAL)
     }
 
-    private fun bindCameraToPreview(previewView: PreviewView) {
-        val lensFacing = if (activeCameraMode == ActiveCameraMode.FRONT_BEHIND) {
-            CameraSelector.LENS_FACING_FRONT
-        } else {
-            CameraSelector.LENS_FACING_BACK
-        }
-
-        cameraStreamManager.startSingleCamera(
-            previewView = previewView,
-            lensFacing = lensFacing,
-            onFrameAnalyzed = { frame ->
-                perceptionEngine.processCameraFrame(frame)
+    private fun bindCameras() {
+        val isDualActive = cameraStreamManager.startDualConcurrentCameras(
+            rearPreviewView = rearPreviewView,
+            frontPreviewView = frontPreviewView,
+            onRearFrame = { frame ->
+                perceptionEngine.processCameraFrame(frame, ObservationSource.REAR_CAMERA)
+            },
+            onFrontFrame = { frame ->
+                perceptionEngine.processCameraFrame(frame, ObservationSource.FRONT_CAMERA)
+            },
+            onFallbackToSingle = {
+                activeCameraMode = ActiveCameraMode.REAR_AHEAD
             }
         )
-    }
-
-    private fun toggleCameraFacing() {
-        activeCameraMode = if (activeCameraMode == ActiveCameraMode.REAR_AHEAD) {
-            ActiveCameraMode.FRONT_BEHIND
+        activeCameraMode = if (isDualActive) {
+            ActiveCameraMode.DUAL_CONCURRENT
         } else {
             ActiveCameraMode.REAR_AHEAD
         }
-
-        activePreviewView?.let { bindCameraToPreview(it) }
     }
 
     override fun onDestroy() {
