@@ -8,8 +8,10 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraSelector
 import androidx.camera.view.PreviewView
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -30,7 +32,9 @@ import com.vizualx.app.services.ForegroundPerceptionService
 import com.vizualx.app.speech.SpeechManager
 import com.vizualx.app.ui.screens.MainScreen
 import com.vizualx.app.ui.theme.VizualXTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 class MainActivity : ComponentActivity() {
 
@@ -44,11 +48,11 @@ class MainActivity : ComponentActivity() {
 
     private var capabilityReport: DeviceCapabilityReport? by mutableStateOf(null)
     private var isAssistanceActive by mutableStateOf(false)
-    private var activeCameraMode by mutableStateOf(ActiveCameraMode.DUAL_CONCURRENT)
+    private var countdownSeconds by mutableIntStateOf(-1) // -1 = not counting down
+    private var activeCameraMode by mutableStateOf(ActiveCameraMode.REAR_AHEAD)
     private val recentEvents = mutableStateListOf<ContextEvent>()
 
-    private var rearPreviewView: PreviewView? = null
-    private var frontPreviewView: PreviewView? = null
+    private var activePreviewView: PreviewView? = null
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -57,9 +61,9 @@ class MainActivity : ComponentActivity() {
         val audioGranted = permissions[Manifest.permission.RECORD_AUDIO] == true
 
         if (cameraGranted && audioGranted) {
-            startPerceptionPipeline()
+            startAutomatedStartupSequence()
         } else {
-            Toast.makeText(this, "Camera & Audio permissions are required for VizualX", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Camera and Audio permissions are required for VizualX", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -87,7 +91,8 @@ class MainActivity : ComponentActivity() {
 
         cameraStreamManager = CameraStreamManager(this, this)
         cameraStreamManager.initialize {
-            // Camera provider ready
+            // Once camera is ready, check permissions and auto-start
+            checkAndAutoStart()
         }
 
         // Collect perception events
@@ -107,11 +112,12 @@ class MainActivity : ComponentActivity() {
             VizualXTheme {
                 MainScreen(
                     isAssistanceActive = isAssistanceActive,
+                    countdownSeconds = countdownSeconds,
                     onToggleAssistance = {
                         if (isAssistanceActive) {
                             stopPerceptionPipeline()
                         } else {
-                            checkAndRequestPermissions()
+                            startAutomatedStartupSequence()
                         }
                     },
                     cameraMode = activeCameraMode,
@@ -131,16 +137,10 @@ class MainActivity : ComponentActivity() {
                     onVoiceQueryClick = {
                         speechManager.startListening()
                     },
-                    onRearPreviewViewCreated = { view ->
-                        rearPreviewView = view
+                    onPreviewViewCreated = { previewView ->
+                        activePreviewView = previewView
                         if (isAssistanceActive) {
-                            bindCameras()
-                        }
-                    },
-                    onFrontPreviewViewCreated = { view ->
-                        frontPreviewView = view
-                        if (isAssistanceActive) {
-                            bindCameras()
+                            bindCameraToPreview(previewView)
                         }
                     }
                 )
@@ -148,7 +148,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun checkAndRequestPermissions() {
+    private fun checkAndAutoStart() {
         val permissions = mutableListOf(
             Manifest.permission.CAMERA,
             Manifest.permission.RECORD_AUDIO
@@ -162,9 +162,40 @@ class MainActivity : ComponentActivity() {
         }
 
         if (missing.isEmpty()) {
-            startPerceptionPipeline()
+            startAutomatedStartupSequence()
         } else {
             permissionLauncher.launch(missing.toTypedArray())
+        }
+    }
+
+    private fun getTimeGreeting(): String {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        return when (hour) {
+            in 4..11 -> "Good morning"
+            in 12..17 -> "Good afternoon"
+            else -> "Good evening"
+        }
+    }
+
+    private fun startAutomatedStartupSequence() {
+        if (isAssistanceActive) return
+
+        lifecycleScope.launch {
+            val greeting = getTimeGreeting()
+            countdownSeconds = 3
+            speechManager.speak("$greeting. VizualX starting in three... two... one...", EventPriority.CRITICAL)
+
+            // Visual and audio countdown
+            delay(1000)
+            countdownSeconds = 2
+            delay(1000)
+            countdownSeconds = 1
+            delay(1000)
+            countdownSeconds = 0
+
+            // Activate perception engine
+            startPerceptionPipeline()
+            countdownSeconds = -1
         }
     }
 
@@ -173,8 +204,8 @@ class MainActivity : ComponentActivity() {
         ForegroundPerceptionService.startService(this)
         audioCapture.startCapture()
 
-        bindCameras()
-        speechManager.speak("VizualX perception active.", EventPriority.HIGH)
+        activePreviewView?.let { bindCameraToPreview(it) }
+        speechManager.speak("Perception active. Monitoring your environment.", EventPriority.HIGH)
     }
 
     private fun stopPerceptionPipeline() {
@@ -185,25 +216,14 @@ class MainActivity : ComponentActivity() {
         speechManager.speak("VizualX paused.", EventPriority.NORMAL)
     }
 
-    private fun bindCameras() {
-        val isDualActive = cameraStreamManager.startDualConcurrentCameras(
-            rearPreviewView = rearPreviewView,
-            frontPreviewView = frontPreviewView,
-            onRearFrame = { frame ->
+    private fun bindCameraToPreview(previewView: PreviewView) {
+        cameraStreamManager.startSingleCamera(
+            previewView = previewView,
+            lensFacing = CameraSelector.LENS_FACING_BACK,
+            onFrameAnalyzed = { frame ->
                 perceptionEngine.processCameraFrame(frame, ObservationSource.REAR_CAMERA)
-            },
-            onFrontFrame = { frame ->
-                perceptionEngine.processCameraFrame(frame, ObservationSource.FRONT_CAMERA)
-            },
-            onFallbackToSingle = {
-                activeCameraMode = ActiveCameraMode.REAR_AHEAD
             }
         )
-        activeCameraMode = if (isDualActive) {
-            ActiveCameraMode.DUAL_CONCURRENT
-        } else {
-            ActiveCameraMode.REAR_AHEAD
-        }
     }
 
     override fun onDestroy() {

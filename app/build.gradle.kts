@@ -72,6 +72,10 @@ dependencies {
     implementation(libs.androidx.camera.view)
     implementation(libs.androidx.camera.extensions)
 
+    // On-Device ML Kit
+    implementation(libs.mlkit.object.detection)
+    implementation(libs.mlkit.text.recognition)
+
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
 
