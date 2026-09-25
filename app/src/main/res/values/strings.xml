@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">VizualX</string>
+    <string name="tagline">Context-Aware AI Perception Guide</string>
+    <string name="start_assistance">Start Perception</string>
+    <string name="stop_assistance">Pause Perception</string>
+    <string name="camera_status">Camera Stream</string>
+    <string name="audio_status">Environmental Audio</string>
+    <string name="device_diagnostics">Hardware Diagnostics</string>
+    <string name="perception_feed">Real-time Observations</string>
+    <string name="notification_channel_name">VizualX Perception Service</string>
+    <string name="notification_channel_desc">Maintains continuous multimodal perception</string>
+    <string name="service_running_title">VizualX Active</string>
+    <string name="service_running_text">Perceiving surroundings and monitoring hazards</string>
+</resources>

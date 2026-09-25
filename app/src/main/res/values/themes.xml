@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.VizualX" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@color/vizualx_background</item>
+        <item name="android:navigationBarColor">@color/vizualx_background</item>
+        <item name="android:windowBackground">@color/vizualx_background</item>
+    </style>
+</resources>
