@@ -74,7 +74,7 @@ class MainActivity : ComponentActivity() {
         capabilityDetector = CameraCapabilityDetector(this)
         capabilityReport = capabilityDetector.detectCapabilities()
 
-        perceptionEngine = PerceptionEngine()
+        perceptionEngine = PerceptionEngine(context = this)
         aiOrchestrator = AIOrchestrator(perceptionEngine.worldState)
         hapticManager = HapticFeedbackManager(this)
 
@@ -230,6 +230,7 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         cameraStreamManager.shutdown()
         audioCapture.stopCapture()
+        perceptionEngine.close()
         speechManager.shutdown()
     }
 }

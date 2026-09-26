@@ -60,7 +60,7 @@ class ContextEngineTest {
     }
 
     @Test
-    fun `ambient tree observation produces IGNORE priority and remains silent`() {
+    fun `ambient tree observation produces LOW priority and remains silent`() {
         val obs = ObjectObservation(
             id = "tree-1",
             source = ObservationSource.REAR_CAMERA,
@@ -72,7 +72,7 @@ class ContextEngineTest {
 
         val event = contextEngine.evaluate(obs)
 
-        assertEquals(EventPriority.IGNORE, event.priority)
+        assertEquals(EventPriority.LOW, event.priority)
         assertNull(event.spokenText)
     }
 

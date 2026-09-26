@@ -9,14 +9,14 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-private val DarkColorScheme = darkColorScheme(
-    primary = CyanPrimary,
-    secondary = VioletSecondary,
-    background = DarkBackground,
-    surface = DarkSurface,
-    surfaceVariant = DarkSurfaceHighlight,
-    onPrimary = DarkBackground,
-    onSecondary = TextPrimary,
+private val LightColorScheme = androidx.compose.material3.lightColorScheme(
+    primary = BrandPrimary,
+    secondary = BrandAccent,
+    background = LightBackground,
+    surface = LightSurface,
+    surfaceVariant = LightSurfaceVariant,
+    onPrimary = androidx.compose.ui.graphics.Color.White,
+    onSecondary = androidx.compose.ui.graphics.Color.White,
     onBackground = TextPrimary,
     onSurface = TextPrimary
 )
@@ -25,14 +25,16 @@ private val DarkColorScheme = darkColorScheme(
 fun VizualXTheme(
     content: @Composable () -> Unit
 ) {
-    val colorScheme = DarkColorScheme
+    val colorScheme = LightColorScheme
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
             window.statusBarColor = colorScheme.background.toArgb()
             window.navigationBarColor = colorScheme.background.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+            val insetsController = WindowCompat.getInsetsController(window, view)
+            insetsController.isAppearanceLightStatusBars = true
+            insetsController.isAppearanceLightNavigationBars = true
         }
     }
 

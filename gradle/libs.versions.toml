@@ -13,6 +13,8 @@ coroutines = "1.8.1"
 materialIconsExtended = "1.7.2"
 mlkitObjectDetection = "17.0.2"
 mlkitTextRecognition = "16.0.1"
+mlkitImageLabeling = "17.0.9"
+mediapipeTasksVision = "0.10.14"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -39,9 +41,11 @@ androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycl
 androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
 androidx-camera-extensions = { group = "androidx.camera", name = "camera-extensions", version.ref = "camerax" }
 
-# On-Device ML Kit
+# On-Device ML Kit & MediaPipe Tasks
 mlkit-objectdetection = { group = "com.google.mlkit", name = "object-detection", version.ref = "mlkitObjectDetection" }
 mlkit-textrecognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitTextRecognition" }
+mlkit-imagelabeling = { group = "com.google.mlkit", name = "image-labeling", version.ref = "mlkitImageLabeling" }
+mediapipe-tasks-vision = { group = "com.google.mediapipe", name = "tasks-vision", version.ref = "mediapipeTasksVision" }
 
 # Coroutines
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }

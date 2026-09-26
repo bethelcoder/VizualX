@@ -53,7 +53,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -67,17 +66,25 @@ import com.vizualx.app.context.EventPriority
 import com.vizualx.app.perception.models.ObjectType
 import com.vizualx.app.perception.models.RelativePosition
 import com.vizualx.app.speech.VoiceAssistantState
+import com.vizualx.app.ui.theme.BorderMedium
 import com.vizualx.app.ui.theme.BorderSubtle
-import com.vizualx.app.ui.theme.CyanPrimary
-import com.vizualx.app.ui.theme.DarkBackground
-import com.vizualx.app.ui.theme.DarkSurface
-import com.vizualx.app.ui.theme.DarkSurfaceHighlight
+import com.vizualx.app.ui.theme.BrandAccent
+import com.vizualx.app.ui.theme.BrandAccentLight
+import com.vizualx.app.ui.theme.BrandPrimary
 import com.vizualx.app.ui.theme.HazardCritical
+import com.vizualx.app.ui.theme.HazardCriticalBg
 import com.vizualx.app.ui.theme.HazardHigh
+import com.vizualx.app.ui.theme.HazardHighBg
+import com.vizualx.app.ui.theme.HazardLow
+import com.vizualx.app.ui.theme.HazardLowBg
 import com.vizualx.app.ui.theme.HazardNormal
+import com.vizualx.app.ui.theme.HazardNormalBg
+import com.vizualx.app.ui.theme.LightBackground
+import com.vizualx.app.ui.theme.LightSurface
+import com.vizualx.app.ui.theme.LightSurfaceVariant
 import com.vizualx.app.ui.theme.TextPrimary
 import com.vizualx.app.ui.theme.TextSecondary
-import com.vizualx.app.ui.theme.VioletSecondary
+import com.vizualx.app.ui.theme.TextTertiary
 import kotlinx.coroutines.flow.StateFlow
 
 @Composable
@@ -109,13 +116,13 @@ fun MainScreen(
                     onDoubleTap = { onVoiceQueryClick() }
                 )
             },
-        color = DarkBackground
+        color = LightBackground
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
                 // Header Bar
                 HeaderSection(
@@ -125,7 +132,7 @@ fun MainScreen(
                     onDiagnosticsClick = { showDiagnosticsDialog = true }
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Primary Ahead Camera & Audio Monitor
                 AheadCameraAudioMonitor(
@@ -134,12 +141,12 @@ fun MainScreen(
                     onPreviewViewCreated = onPreviewViewCreated
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Spoken Subtitle Banner
                 SpokenBanner(lastSpoken = lastSpoken, assistantState = assistantState)
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Action Controls Row
                 ActionControlsRow(
@@ -148,17 +155,17 @@ fun MainScreen(
                     onVoiceQuery = onVoiceQueryClick
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Feasibility Spike Simulators (1-Tap Test)
                 SimulationTestChips(onSimulate = onSimulate)
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Perception Event Stream Feed
                 Text(
                     text = "Real-time Perception Feed",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = TextPrimary,
                     modifier = Modifier.padding(bottom = 6.dp)
                 )
@@ -175,17 +182,17 @@ fun MainScreen(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(140.dp)
+                        .size(130.dp)
                         .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.85f))
-                        .border(3.dp, CyanPrimary, CircleShape),
+                        .background(LightSurface)
+                        .border(3.dp, BrandAccent, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = "$countdownSeconds",
-                            style = MaterialTheme.typography.headlineLarge.copy(fontSize = 48.sp, fontWeight = FontWeight.Bold),
-                            color = CyanPrimary
+                            style = MaterialTheme.typography.headlineLarge.copy(fontSize = 44.sp, fontWeight = FontWeight.Bold),
+                            color = BrandAccent
                         )
                         Text(
                             text = "Starting...",
@@ -222,16 +229,14 @@ fun HeaderSection(
             Box(
                 modifier = Modifier
                     .size(38.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(listOf(CyanPrimary, VioletSecondary))
-                    ),
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(BrandPrimary),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Visibility,
                     contentDescription = "VizualX Logo",
-                    tint = DarkBackground,
+                    tint = Color.White,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -239,7 +244,7 @@ fun HeaderSection(
             Column {
                 Text(
                     text = "VizualX",
-                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, fontSize = 22.sp),
                     color = TextPrimary
                 )
                 Text(
@@ -249,7 +254,8 @@ fun HeaderSection(
                         else -> "Standby"
                     },
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (isAssistanceActive) CyanPrimary else TextSecondary
+                    color = if (isAssistanceActive) BrandAccent else TextSecondary,
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
@@ -258,12 +264,12 @@ fun HeaderSection(
             onClick = onDiagnosticsClick,
             modifier = Modifier
                 .clip(CircleShape)
-                .background(DarkSurfaceHighlight)
+                .background(LightSurfaceVariant)
         ) {
             Icon(
                 imageVector = Icons.Default.Info,
                 contentDescription = "Device Diagnostics",
-                tint = CyanPrimary
+                tint = BrandPrimary
             )
         }
     }
@@ -278,9 +284,9 @@ fun AheadCameraAudioMonitor(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(200.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+            .height(190.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = LightSurface),
         border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -297,7 +303,7 @@ fun AheadCameraAudioMonitor(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(DarkSurface),
+                        .background(LightSurfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -314,14 +320,15 @@ fun AheadCameraAudioMonitor(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(8.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.Black.copy(alpha = 0.75f))
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(LightSurface.copy(alpha = 0.92f))
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(6.dp))
                     .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
                 Text(
                     text = "AHEAD CAM • Live Perception",
                     style = MaterialTheme.typography.labelSmall,
-                    color = CyanPrimary,
+                    color = BrandPrimary,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -332,7 +339,7 @@ fun AheadCameraAudioMonitor(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomStart)
-                        .background(Color.Black.copy(alpha = 0.75f))
+                        .background(LightSurface.copy(alpha = 0.92f))
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Row(
@@ -347,7 +354,8 @@ fun AheadCameraAudioMonitor(
                         Text(
                             text = "${audioDb.toInt()} dB",
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (audioDb > 70f) HazardCritical else CyanPrimary
+                            color = if (audioDb > 70f) HazardCritical else BrandAccent,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
@@ -357,7 +365,7 @@ fun AheadCameraAudioMonitor(
                             .fillMaxWidth()
                             .height(4.dp)
                             .clip(RoundedCornerShape(2.dp)),
-                        color = if (audioDb > 70f) HazardCritical else CyanPrimary,
+                        color = if (audioDb > 70f) HazardCritical else BrandAccent,
                         trackColor = BorderSubtle,
                     )
                 }
@@ -371,25 +379,34 @@ fun SpokenBanner(lastSpoken: String?, assistantState: VoiceAssistantState) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkSurfaceHighlight),
+        colors = CardDefaults.cardColors(containerColor = LightSurface),
         border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                contentDescription = "Voice Output",
-                tint = CyanPrimary,
-                modifier = Modifier.size(20.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(BrandAccentLight),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                    contentDescription = "Voice Output",
+                    tint = BrandAccent,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
             Spacer(modifier = Modifier.width(10.dp))
             Column {
                 Text(
                     text = "LAST SPOKEN ALERT",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = TextTertiary,
+                    fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = lastSpoken ?: "System silent (no hazards detected)",
@@ -418,8 +435,8 @@ fun ActionControlsRow(
                 .height(48.dp),
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (isAssistanceActive) HazardCritical else CyanPrimary,
-                contentColor = DarkBackground
+                containerColor = if (isAssistanceActive) HazardCritical else BrandPrimary,
+                contentColor = Color.White
             )
         ) {
             Icon(
@@ -441,8 +458,8 @@ fun ActionControlsRow(
                 .height(48.dp),
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = VioletSecondary,
-                contentColor = TextPrimary
+                containerColor = BrandAccent,
+                contentColor = Color.White
             )
         ) {
             Icon(
@@ -477,21 +494,25 @@ fun SimulationTestChips(
             SimulationChip(
                 label = "Vehicle Alert",
                 color = HazardCritical,
+                bgColor = HazardCriticalBg,
                 onClick = { onSimulate(ObjectType.VEHICLE, RelativePosition.RIGHT, 3.5f, "Approaching Vehicle") }
             )
             SimulationChip(
                 label = "Stairs Down",
                 color = HazardCritical,
+                bgColor = HazardCriticalBg,
                 onClick = { onSimulate(ObjectType.STAIRS_DOWN, RelativePosition.AHEAD, 1.8f, "Stairs Descending") }
             )
             SimulationChip(
                 label = "Doorway",
                 color = HazardHigh,
+                bgColor = HazardHighBg,
                 onClick = { onSimulate(ObjectType.DOOR, RelativePosition.AHEAD, 5.0f, "Science Lab Entrance") }
             )
             SimulationChip(
                 label = "Landmark",
-                color = CyanPrimary,
+                color = BrandAccent,
+                bgColor = BrandAccentLight,
                 onClick = { onSimulate(ObjectType.CAMPUS_LANDMARK, RelativePosition.AHEAD, 12f, "Wits Science Stadium") }
             )
         }
@@ -502,19 +523,20 @@ fun SimulationTestChips(
 fun SimulationChip(
     label: String,
     color: Color,
+    bgColor: Color,
     onClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(DarkSurfaceHighlight)
-            .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+            .background(bgColor)
+            .border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 6.dp)
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
             color = color
         )
     }
@@ -550,19 +572,19 @@ fun EventStreamList(events: List<ContextEvent>) {
 
 @Composable
 fun EventCard(event: ContextEvent) {
-    val (priorityColor, priorityText) = when (event.priority) {
-        EventPriority.CRITICAL -> HazardCritical to "CRITICAL"
-        EventPriority.HIGH -> HazardHigh to "HIGH"
-        EventPriority.NORMAL -> HazardNormal to "NORMAL"
-        EventPriority.LOW -> Color.Gray to "LOW"
-        EventPriority.IGNORE -> Color.DarkGray to "IGNORE"
+    val (priorityColor, priorityBg, priorityText) = when (event.priority) {
+        EventPriority.CRITICAL -> Triple(HazardCritical, HazardCriticalBg, "CRITICAL")
+        EventPriority.HIGH -> Triple(HazardHigh, HazardHighBg, "HIGH")
+        EventPriority.NORMAL -> Triple(HazardNormal, HazardNormalBg, "NORMAL")
+        EventPriority.LOW -> Triple(HazardLow, HazardLowBg, "LOW")
+        EventPriority.IGNORE -> Triple(TextTertiary, LightSurfaceVariant, "IGNORE")
     }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, priorityColor.copy(alpha = 0.3f))
+        colors = CardDefaults.cardColors(containerColor = LightSurface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
     ) {
         Row(
             modifier = Modifier
@@ -587,7 +609,8 @@ fun EventCard(event: ContextEvent) {
                     Text(
                         text = "Spoke: \"${event.spokenText}\"",
                         style = MaterialTheme.typography.labelSmall,
-                        color = CyanPrimary
+                        color = BrandAccent,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
@@ -595,8 +618,8 @@ fun EventCard(event: ContextEvent) {
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
-                    .background(priorityColor.copy(alpha = 0.15f))
-                    .border(1.dp, priorityColor, RoundedCornerShape(6.dp))
+                    .background(priorityBg)
+                    .border(1.dp, priorityColor.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
                     .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
                 Text(
@@ -637,7 +660,7 @@ fun DiagnosticsDialog(
                 )
                 Text(
                     text = if (report.hasConcurrentCameraSupport) "✓ YES (Dual-Stream Supported)" else "✗ NO (Single-Stream Fallback)",
-                    color = if (report.hasConcurrentCameraSupport) CyanPrimary else HazardCritical,
+                    color = if (report.hasConcurrentCameraSupport) BrandAccent else HazardCritical,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -648,10 +671,10 @@ fun DiagnosticsDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Close", color = CyanPrimary)
+                Text("Close", color = BrandAccent, fontWeight = FontWeight.Bold)
             }
         },
-        containerColor = DarkSurface,
+        containerColor = LightSurface,
         shape = RoundedCornerShape(16.dp)
     )
 }

@@ -27,8 +27,18 @@ data class ContextEvent(
 class ContextEngine(
     private val worldState: WorldState
 ) {
-    private var lastSpokenEventTimestamp: Long = 0L
-    private var lastSpokenText: String? = null
+    private val spokenHistory = mutableMapOf<String, Long>()
+
+    fun debounceSpoken(text: String, cooldownMs: Long): String? {
+        val now = System.currentTimeMillis()
+        val lastSpoken = spokenHistory[text] ?: 0L
+        return if (now - lastSpoken >= cooldownMs) {
+            spokenHistory[text] = now
+            text
+        } else {
+            null
+        }
+    }
 
     fun evaluate(observation: Observation): ContextEvent {
         worldState.updateObservation(observation)
@@ -58,20 +68,33 @@ class ContextEngine(
                     displayDetail = "Vehicle detected $posText (confidence: ${(obs.confidence * 100).toInt()}%)"
                 )
             }
+
+            ObjectType.DOOR -> {
+                val spoken = debounceSpoken("Doorway detected ahead.", 5000L)
+                ContextEvent(
+                    id = obs.id,
+                    priority = EventPriority.HIGH,
+                    spokenText = spoken,
+                    displayTitle = "Doorway",
+                    displayDetail = "Entrance / door ${formatDistance(obs.approximateDistanceMeters)} (${obs.label})"
+                )
+            }
             ObjectType.STAIRS_DOWN -> {
+                val spoken = debounceSpoken("Caution. Stairs going down directly ahead.", 4000L)
                 ContextEvent(
                     id = obs.id,
                     priority = EventPriority.CRITICAL,
-                    spokenText = "Caution. Stairs going down directly ahead.",
-                    displayTitle = "Stairs Down",
+                    spokenText = spoken,
+                    displayTitle = "Stairs Down Hazard",
                     displayDetail = "Stairs descending ahead"
                 )
             }
             ObjectType.STAIRS_UP -> {
+                val spoken = debounceSpoken("Stairs going up ahead.", 4000L)
                 ContextEvent(
                     id = obs.id,
                     priority = EventPriority.HIGH,
-                    spokenText = "Stairs going up ahead.",
+                    spokenText = spoken,
                     displayTitle = "Stairs Up",
                     displayDetail = "Stairs ascending ahead"
                 )
@@ -79,48 +102,43 @@ class ContextEngine(
             ObjectType.OBSTACLE -> {
                 val isImmediate = (obs.approximateDistanceMeters ?: 5f) < 2.0f
                 val priority = if (isImmediate) EventPriority.CRITICAL else EventPriority.HIGH
-                val spoken = if (isImmediate) "Obstacle directly in your path." else "Obstacle ahead."
+                val rawSpoken = if (isImmediate) "Obstacle directly in your path." else "Obstacle ahead."
+                val spoken = debounceSpoken(rawSpoken, 3500L)
                 ContextEvent(
                     id = obs.id,
                     priority = priority,
                     spokenText = spoken,
-                    displayTitle = "Obstacle Detected",
-                    displayDetail = "Obstacle ${formatDistance(obs.approximateDistanceMeters)}"
-                )
-            }
-            ObjectType.DOOR -> {
-                ContextEvent(
-                    id = obs.id,
-                    priority = EventPriority.HIGH,
-                    spokenText = "Doorway detected ahead.",
-                    displayTitle = "Doorway",
-                    displayDetail = "Entrance / door ${formatDistance(obs.approximateDistanceMeters)}"
+                    displayTitle = if (obs.label.isNotBlank() && obs.label != "OBSTACLE") obs.label.replaceFirstChar { it.uppercase() } else "Obstacle",
+                    displayDetail = "${obs.label} ${formatDistance(obs.approximateDistanceMeters)}"
                 )
             }
             ObjectType.CROSSWALK -> {
+                val spoken = debounceSpoken("Pedestrian crossing ahead.", 5000L)
                 ContextEvent(
                     id = obs.id,
                     priority = EventPriority.HIGH,
-                    spokenText = "Pedestrian crossing ahead.",
+                    spokenText = spoken,
                     displayTitle = "Crossing",
                     displayDetail = "Crosswalk marked ahead"
                 )
             }
             ObjectType.CAMPUS_LANDMARK -> {
+                val spoken = debounceSpoken(obs.label, 8000L)
                 ContextEvent(
                     id = obs.id,
                     priority = EventPriority.HIGH,
-                    spokenText = obs.label,
+                    spokenText = spoken,
                     displayTitle = "Landmark",
                     displayDetail = obs.label
                 )
             }
             ObjectType.PERSON -> {
                 val pos = formatPosition(obs.position)
+                val spoken = debounceSpoken("Person $pos.", 3500L)
                 ContextEvent(
                     id = obs.id,
                     priority = EventPriority.NORMAL,
-                    spokenText = "Person $pos.",
+                    spokenText = spoken,
                     displayTitle = "Person",
                     displayDetail = "Person $pos ${formatDistance(obs.approximateDistanceMeters)}"
                 )
@@ -135,12 +153,13 @@ class ContextEngine(
                 )
             }
             ObjectType.TREE, ObjectType.BENCH, ObjectType.UNKNOWN -> {
+                val title = if (obs.label.isNotBlank() && obs.label != "UNKNOWN") obs.label.replaceFirstChar { it.uppercase() } else obs.type.name
                 ContextEvent(
                     id = obs.id,
-                    priority = EventPriority.IGNORE,
+                    priority = EventPriority.LOW,
                     spokenText = null, // Principle: silence is valid, do not describe background clutter
-                    displayTitle = obs.type.name,
-                    displayDetail = "Ambient object ${obs.type.name}"
+                    displayTitle = title,
+                    displayDetail = "Surrounding: $title ${formatDistance(obs.approximateDistanceMeters)}"
                 )
             }
         }

@@ -1,22 +1,22 @@
 package com.vizualx.app.perception
 
-import androidx.annotation.OptIn
-import androidx.camera.core.ExperimentalGetImage
+import android.content.Context
 import androidx.camera.core.ImageProxy
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.objects.ObjectDetection
-import com.google.mlkit.vision.objects.defaults.ObjectDetectorOptions
+import com.google.mediapipe.tasks.vision.objectdetector.ObjectDetectorResult
 import com.vizualx.app.audio.BaselineSoundClassifier
 import com.vizualx.app.audio.SoundClassifier
 import com.vizualx.app.context.ContextEngine
 import com.vizualx.app.context.ContextEvent
 import com.vizualx.app.context.WorldState
-import com.vizualx.app.perception.models.AudioObservation
+import com.vizualx.app.perception.heuristics.ContextAwarenessEngine
+import com.vizualx.app.perception.mediapipe.MediaPipeObjectDetectorHelper
 import com.vizualx.app.perception.models.ObjectObservation
 import com.vizualx.app.perception.models.ObjectType
 import com.vizualx.app.perception.models.Observation
 import com.vizualx.app.perception.models.ObservationSource
 import com.vizualx.app.perception.models.RelativePosition
+import com.vizualx.app.perception.scene.SceneInsight
+import com.vizualx.app.perception.scene.SceneUnderstandingHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -25,96 +25,143 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+import android.util.Log
+import com.google.mlkit.vision.common.InputImage
+
 class PerceptionEngine(
     val worldState: WorldState = WorldState(),
     val contextEngine: ContextEngine = ContextEngine(worldState),
-    private val soundClassifier: SoundClassifier = BaselineSoundClassifier()
+    private val soundClassifier: SoundClassifier = BaselineSoundClassifier(),
+    context: Context? = null
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
 
     private val _eventFlow = MutableSharedFlow<ContextEvent>(replay = 10)
     val eventFlow: SharedFlow<ContextEvent> = _eventFlow.asSharedFlow()
 
-    private var lastFrameProcessTime = 0L
-    private val frameThrottleMs = 250L // 4 FPS processing throttle for thermal & battery optimization
-
-    // On-device real-time stream object detector
-    private val objectDetectorOptions = ObjectDetectorOptions.Builder()
-        .setDetectorMode(ObjectDetectorOptions.STREAM_MODE)
-        .enableMultipleObjects()
-        .enableClassification()
-        .build()
-
-    private val objectDetector = ObjectDetection.getClient(objectDetectorOptions)
-
-    @OptIn(ExperimentalGetImage::class)
-    fun processCameraFrame(imageProxy: ImageProxy, source: ObservationSource = ObservationSource.REAR_CAMERA) {
-        val now = System.currentTimeMillis()
-        if (now - lastFrameProcessTime < frameThrottleMs) {
-            return
+    // Context Awareness Engine with temporal debouncing & scenario classification
+    val contextAwarenessEngine = ContextAwarenessEngine(
+        worldState = worldState,
+        contextEngine = contextEngine,
+        onHazardDetected = { event ->
+            scope.launch {
+                _eventFlow.emit(event)
+            }
         }
-        lastFrameProcessTime = now
+    )
 
-        val mediaImage = imageProxy.image
-        if (mediaImage == null) return
+    // MediaPipe Tasks Object Detector Helper
+    var mediaPipeHelper: MediaPipeObjectDetectorHelper? = null
+        private set
 
-        val inputImage = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
-        val imageWidth = imageProxy.width.toFloat()
-        val imageHeight = imageProxy.height.toFloat()
+    // Scene Understanding Helper (ML Kit Image Labeling for Doors/Stairs/Hand + Text OCR)
+    private val sceneHelper = SceneUnderstandingHelper()
 
-        objectDetector.process(inputImage)
-            .addOnSuccessListener { detectedObjects ->
-                for (obj in detectedObjects) {
-                    val box = obj.boundingBox
-                    val centerX = box.centerX() / imageWidth
-                    val boxHeightRatio = box.height() / imageHeight
+    private var isHandCurrentlyInView = false
+    private var lastHandSeenTime = 0L
 
-                    // Determine relative position in user's field of view
-                    val position = when {
-                        centerX < 0.35f -> RelativePosition.LEFT
-                        centerX > 0.65f -> RelativePosition.RIGHT
-                        else -> RelativePosition.AHEAD
-                    }
-
-                    // Estimate proximity based on bounding box vertical coverage
-                    val approxDistance = when {
-                        boxHeightRatio > 0.65f -> 1.2f // Very close (< 1.5m)
-                        boxHeightRatio > 0.40f -> 2.5f // Moderate (~ 2.5m)
-                        boxHeightRatio > 0.20f -> 4.5f // Mid range (~ 4.5m)
-                        else -> 7.0f // Far (> 5m)
-                    }
-
-                    // Extract ML classification label or infer object type
-                    val primaryLabel = obj.labels.maxByOrNull { it.confidence }
-                    val labelText = primaryLabel?.text?.lowercase() ?: "obstacle"
-                    val confidence = primaryLabel?.confidence ?: 0.80f
-
-                    val objectType = when {
-                        labelText.contains("person") || labelText.contains("human") -> ObjectType.PERSON
-                        labelText.contains("vehicle") || labelText.contains("car") || labelText.contains("bus") -> ObjectType.VEHICLE
-                        labelText.contains("door") || labelText.contains("entrance") -> ObjectType.DOOR
-                        labelText.contains("stairs") || labelText.contains("step") -> ObjectType.STAIRS_DOWN
-                        approxDistance < 2.0f && position == RelativePosition.AHEAD -> ObjectType.OBSTACLE
-                        else -> ObjectType.OBSTACLE
-                    }
-
-                    val observation = ObjectObservation(
-                        id = "ml-${obj.trackingId ?: UUID.randomUUID()}",
-                        source = source,
-                        confidence = confidence,
-                        timestampMs = now,
-                        type = objectType,
-                        position = position,
-                        approximateDistanceMeters = approxDistance,
-                        label = primaryLabel?.text ?: objectType.name
-                    )
-
-                    emitObservation(observation)
+    init {
+        if (context != null) {
+            mediaPipeHelper = MediaPipeObjectDetectorHelper(
+                context = context,
+                threshold = 0.45f,
+                maxResults = 7,
+                modelName = "efficientdet_lite0.tflite",
+                resultListener = { result, mpImage ->
+                    processMediaPipeResult(result, mpImage.width, mpImage.height)
+                },
+                errorListener = { err ->
+                    Log.e("PerceptionEngine", "MediaPipe error: $err")
                 }
+            )
+        }
+    }
+
+    fun processCameraFrame(imageProxy: ImageProxy, source: ObservationSource = ObservationSource.REAR_CAMERA) {
+        try {
+            val rotation = imageProxy.imageInfo.rotationDegrees
+            // Convert to standalone in-memory Bitmap synchronously so ImageProxy can be safely closed
+            val bitmap = imageProxy.toBitmap()
+
+            // 1. Run Scene Understanding (Doors, Stairs, Signs, Hand filter)
+            val inputImage = InputImage.fromBitmap(bitmap, rotation)
+            sceneHelper.analyzeScene(inputImage) { insight ->
+                handleSceneInsight(insight, source)
             }
-            .addOnFailureListener {
-                // Ignore transient frame analysis errors
-            }
+
+            // 2. Run MediaPipe Object Detection
+            mediaPipeHelper?.detectLiveStream(
+                bitmap = bitmap,
+                rotationDegrees = rotation,
+                isFrontCamera = (source == ObservationSource.FRONT_CAMERA)
+            )
+        } catch (e: Exception) {
+            Log.e("PerceptionEngine", "Error processing camera frame: ${e.message}")
+        }
+    }
+
+    private fun handleSceneInsight(insight: SceneInsight, source: ObservationSource) {
+        val now = System.currentTimeMillis()
+
+        if (insight.isHandOrSelf) {
+            isHandCurrentlyInView = true
+            lastHandSeenTime = now
+            return // Suppress hand from generating false person alerts
+        }
+
+        if (now - lastHandSeenTime > 1500L) {
+            isHandCurrentlyInView = false
+        }
+
+        if (insight.detectedType == ObjectType.DOOR || 
+            insight.detectedType == ObjectType.STAIRS_DOWN || 
+            insight.detectedType == ObjectType.SIGN) {
+            
+            val obs = ObjectObservation(
+                id = "scene-${insight.detectedType.name}-${UUID.randomUUID()}",
+                source = source,
+                confidence = insight.confidence,
+                timestampMs = now,
+                type = insight.detectedType,
+                position = RelativePosition.AHEAD,
+                approximateDistanceMeters = 3.0f,
+                label = insight.label
+            )
+            emitObservation(obs)
+        } else if (insight.label.isNotBlank() && insight.detectedType == ObjectType.UNKNOWN) {
+            // General prominent scene label (e.g. Room, Office, Corridor)
+            val obs = ObjectObservation(
+                id = "scene-ambient-${UUID.randomUUID()}",
+                source = source,
+                confidence = insight.confidence,
+                timestampMs = now,
+                type = ObjectType.UNKNOWN,
+                position = RelativePosition.AHEAD,
+                approximateDistanceMeters = null,
+                label = insight.label
+            )
+            emitObservation(obs)
+        }
+    }
+
+    fun processMediaPipeResult(
+        result: ObjectDetectorResult,
+        imageWidth: Int,
+        imageHeight: Int,
+        source: ObservationSource = ObservationSource.REAR_CAMERA
+    ) {
+        val now = System.currentTimeMillis()
+        if (now - lastHandSeenTime < 1500L) {
+            isHandCurrentlyInView = true
+        }
+
+        contextAwarenessEngine.processDetectionResult(
+            result = result,
+            imageWidth = imageWidth,
+            imageHeight = imageHeight,
+            source = source,
+            isHandInView = isHandCurrentlyInView
+        )
     }
 
     fun processAudioBuffer(buffer: ShortArray, volumeDb: Float) {
@@ -127,6 +174,11 @@ class PerceptionEngine(
             val event = contextEngine.evaluate(observation)
             _eventFlow.emit(event)
         }
+    }
+
+    fun close() {
+        mediaPipeHelper?.close()
+        sceneHelper.close()
     }
 
     // Diagnostic & simulation helpers for testing and demonstration

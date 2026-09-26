@@ -61,8 +61,13 @@ class CameraStreamManager(
                 .build()
                 .also { analysis ->
                     analysis.setAnalyzer(cameraExecutor) { imageProxy ->
-                        callback(imageProxy)
-                        imageProxy.close()
+                        try {
+                            callback(imageProxy)
+                        } catch (e: Exception) {
+                            android.util.Log.e("CameraStream", "Error in analyzer callback: ${e.message}")
+                        } finally {
+                            imageProxy.close()
+                        }
                     }
                 }
         }
