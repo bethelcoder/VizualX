@@ -27,10 +27,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Visibility
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.Polyline
+import com.google.maps.android.compose.rememberCameraPositionState
+import com.vizualx.app.navigation.NavigationManager
+import com.vizualx.app.navigation.NavigationStatus
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -47,6 +58,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -98,6 +110,7 @@ fun MainScreen(
     audioDbFlow: StateFlow<Float>,
     recentEvents: List<ContextEvent>,
     capabilityReport: DeviceCapabilityReport?,
+    navigationManager: NavigationManager,
     onSimulate: (ObjectType, RelativePosition, Float, String) -> Unit,
     onVoiceQueryClick: () -> Unit,
     onPreviewViewCreated: (PreviewView) -> Unit
@@ -105,6 +118,13 @@ fun MainScreen(
     val assistantState by assistantStateFlow.collectAsState()
     val lastSpoken by lastSpokenFlow.collectAsState()
     val audioDb by audioDbFlow.collectAsState()
+
+    val currentLocation by navigationManager.currentLocation.collectAsState()
+    val destination by navigationManager.destination.collectAsState()
+    val navStatus by navigationManager.status.collectAsState()
+    val guidanceMessage by navigationManager.guidanceMessage.collectAsState()
+
+    var activeTab by remember { mutableIntStateOf(0) } // 0 = Camera, 1 = Navigation Map
     var showDiagnosticsDialog by remember { mutableStateOf(false) }
 
     Surface(
@@ -134,12 +154,85 @@ fun MainScreen(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Primary Ahead Camera & Audio Monitor
-                AheadCameraAudioMonitor(
-                    audioDb = audioDb,
-                    isAssistanceActive = isAssistanceActive,
-                    onPreviewViewCreated = onPreviewViewCreated
-                )
+                // View Switcher Tabs (Camera vs Google Maps Navigation)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(LightSurfaceVariant)
+                        .padding(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (activeTab == 0) LightSurface else Color.Transparent)
+                            .clickable { activeTab = 0 }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Visibility,
+                                contentDescription = null,
+                                tint = if (activeTab == 0) BrandPrimary else TextSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Camera Feed",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (activeTab == 0) BrandPrimary else TextSecondary
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (activeTab == 1 || navStatus == NavigationStatus.NAVIGATING) BrandAccentLight else Color.Transparent)
+                            .clickable { activeTab = 1 }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Map,
+                                contentDescription = null,
+                                tint = BrandAccent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (navStatus == NavigationStatus.NAVIGATING) "Live Map Nav • ON" else "Google Maps Nav",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = BrandAccent
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                if (activeTab == 0 && navStatus != NavigationStatus.NAVIGATING) {
+                    // Primary Ahead Camera & Audio Monitor
+                    AheadCameraAudioMonitor(
+                        audioDb = audioDb,
+                        isAssistanceActive = isAssistanceActive,
+                        onPreviewViewCreated = onPreviewViewCreated
+                    )
+                } else {
+                    // Google Maps Real-Time Navigation View
+                    NavigationMapCard(
+                        navigationManager = navigationManager,
+                        currentLocation = currentLocation,
+                        destination = destination,
+                        navStatus = navStatus,
+                        guidanceMessage = guidanceMessage
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -677,4 +770,136 @@ fun DiagnosticsDialog(
         containerColor = LightSurface,
         shape = RoundedCornerShape(16.dp)
     )
+}
+
+@Composable
+fun NavigationMapCard(
+    navigationManager: NavigationManager,
+    currentLocation: android.location.Location?,
+    destination: com.vizualx.app.navigation.NavigationDestination?,
+    navStatus: NavigationStatus,
+    guidanceMessage: String?
+) {
+    val initialLatLng = when {
+        destination != null -> LatLng(destination.latitude, destination.longitude)
+        currentLocation != null -> LatLng(currentLocation.latitude, currentLocation.longitude)
+        else -> LatLng(-26.1929, 28.0305) // Default Johannesburg
+    }
+
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(initialLatLng, 15f)
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(210.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = LightSurface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            GoogleMap(
+                modifier = Modifier.fillMaxSize(),
+                cameraPositionState = cameraPositionState
+            ) {
+                currentLocation?.let { loc ->
+                    Marker(
+                        state = MarkerState(position = LatLng(loc.latitude, loc.longitude)),
+                        title = "Your Location"
+                    )
+                }
+
+                destination?.let { dest ->
+                    val destLatLng = LatLng(dest.latitude, dest.longitude)
+                    Marker(
+                        state = MarkerState(position = destLatLng),
+                        title = dest.placeName,
+                        snippet = dest.formattedAddress
+                    )
+
+                    currentLocation?.let { loc ->
+                        Polyline(
+                            points = listOf(
+                                LatLng(loc.latitude, loc.longitude),
+                                destLatLng
+                            ),
+                            color = BrandAccent,
+                            width = 10f
+                        )
+                    }
+                }
+            }
+
+            // Top Guidance Overlay Banner
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopStart)
+                    .background(LightSurface.copy(alpha = 0.95f))
+                    .border(1.dp, BorderSubtle)
+                    .padding(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = when (navStatus) {
+                                NavigationStatus.NAVIGATING -> "REAL-TIME NAVIGATION"
+                                NavigationStatus.GEOCODING -> "LOCATING DESTINATION..."
+                                NavigationStatus.ARRIVED -> "DESTINATION REACHED"
+                                NavigationStatus.ERROR -> "NAVIGATION ERROR"
+                                NavigationStatus.IDLE -> "GOOGLE MAPS NAV"
+                            },
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            color = if (navStatus == NavigationStatus.NAVIGATING) BrandAccent else TextTertiary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = guidanceMessage ?: "Say 'Navigate to [Location]' to start live directions.",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = TextPrimary
+                        )
+                    }
+
+                    if (destination != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            IconButton(
+                                onClick = { navigationManager.launchExternalGoogleMapsNavigation() },
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(BrandAccent)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Navigation,
+                                    contentDescription = "Turn-by-Turn Voice Nav",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+
+                            IconButton(
+                                onClick = { navigationManager.stopNavigation() },
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(HazardCritical)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Stop,
+                                    contentDescription = "Stop Navigation",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

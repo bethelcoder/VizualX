@@ -30,6 +30,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.VizualX">
 
+        <!-- Google Maps API Key -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyCEQNXUIO2uA7IpTmK7yVGOoRbkC_MF_iI" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -3,9 +3,35 @@ package com.vizualx.app.ai
 import com.vizualx.app.context.WorldState
 import com.vizualx.app.perception.models.ObjectObservation
 
+sealed class AIQueryResult {
+    data class TextResponse(val text: String) : AIQueryResult()
+    data class NavigationRequest(val destinationQuery: String) : AIQueryResult()
+}
+
 class AIOrchestrator(
     private val worldState: WorldState
 ) {
+
+    suspend fun processQuery(query: String): AIQueryResult {
+        val lower = query.lowercase().trim()
+
+        if (lower.startsWith("navigate to") ||
+            lower.startsWith("take me to") ||
+            lower.startsWith("directions to") ||
+            lower.startsWith("how to get to") ||
+            lower.startsWith("where is")
+        ) {
+            val destination = lower
+                .replace(Regex("(?i)^(navigate to|take me to|directions to|how to get to|where is)\\s+"), "")
+                .trim()
+            if (destination.isNotBlank()) {
+                return AIQueryResult.NavigationRequest(destination)
+            }
+        }
+
+        val text = answerUserQuery(query)
+        return AIQueryResult.TextResponse(text)
+    }
 
     suspend fun answerUserQuery(query: String): String {
         val lower = query.lowercase().trim()

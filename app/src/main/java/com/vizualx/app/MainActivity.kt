@@ -19,6 +19,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.vizualx.app.accessibility.HapticFeedbackManager
 import com.vizualx.app.ai.AIOrchestrator
+import com.vizualx.app.ai.AIQueryResult
 import com.vizualx.app.audio.ContinuousAudioCapture
 import com.vizualx.app.camera.ActiveCameraMode
 import com.vizualx.app.camera.CameraCapabilityDetector
@@ -26,6 +27,7 @@ import com.vizualx.app.camera.CameraStreamManager
 import com.vizualx.app.camera.DeviceCapabilityReport
 import com.vizualx.app.context.ContextEvent
 import com.vizualx.app.context.EventPriority
+import com.vizualx.app.navigation.NavigationManager
 import com.vizualx.app.perception.PerceptionEngine
 import com.vizualx.app.perception.models.ObservationSource
 import com.vizualx.app.services.ForegroundPerceptionService
@@ -45,6 +47,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var speechManager: SpeechManager
     private lateinit var hapticManager: HapticFeedbackManager
     private lateinit var aiOrchestrator: AIOrchestrator
+    private lateinit var navigationManager: NavigationManager
 
     private var capabilityReport: DeviceCapabilityReport? by mutableStateOf(null)
     private var isAssistanceActive by mutableStateOf(false)
@@ -63,7 +66,7 @@ class MainActivity : ComponentActivity() {
         if (cameraGranted && audioGranted) {
             startAutomatedStartupSequence()
         } else {
-            Toast.makeText(this, "Camera and Audio permissions are required for VizualX", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Permissions are required for VizualX", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -77,11 +80,21 @@ class MainActivity : ComponentActivity() {
         perceptionEngine = PerceptionEngine(context = this)
         aiOrchestrator = AIOrchestrator(perceptionEngine.worldState)
         hapticManager = HapticFeedbackManager(this)
+        navigationManager = NavigationManager(this)
 
         speechManager = SpeechManager(this) { userQuery ->
             lifecycleScope.launch {
-                val answer = aiOrchestrator.answerUserQuery(userQuery)
-                speechManager.speak(answer, EventPriority.HIGH)
+                when (val result = aiOrchestrator.processQuery(userQuery)) {
+                    is AIQueryResult.TextResponse -> {
+                        speechManager.speak(result.text, EventPriority.HIGH)
+                    }
+                    is AIQueryResult.NavigationRequest -> {
+                        speechManager.speak("Searching location for ${result.destinationQuery}", EventPriority.HIGH)
+                        navigationManager.searchAndNavigateTo(result.destinationQuery) { spokenGuidance ->
+                            speechManager.speak(spokenGuidance, EventPriority.HIGH)
+                        }
+                    }
+                }
             }
         }
 
@@ -126,6 +139,7 @@ class MainActivity : ComponentActivity() {
                     audioDbFlow = audioCapture.amplitudeFlow,
                     recentEvents = recentEvents,
                     capabilityReport = capabilityReport,
+                    navigationManager = navigationManager,
                     onSimulate = { type, pos, dist, label ->
                         perceptionEngine.simulateObservation(
                             type = type,
@@ -151,7 +165,9 @@ class MainActivity : ComponentActivity() {
     private fun checkAndAutoStart() {
         val permissions = mutableListOf(
             Manifest.permission.CAMERA,
-            Manifest.permission.RECORD_AUDIO
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
@@ -212,6 +228,7 @@ class MainActivity : ComponentActivity() {
         isAssistanceActive = false
         cameraStreamManager.stop()
         audioCapture.stopCapture()
+        navigationManager.stopLocationUpdates()
         ForegroundPerceptionService.stopService(this)
         speechManager.speak("VizualX paused.", EventPriority.NORMAL)
     }
@@ -230,6 +247,7 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         cameraStreamManager.shutdown()
         audioCapture.stopCapture()
+        navigationManager.stopLocationUpdates()
         perceptionEngine.close()
         speechManager.shutdown()
     }
