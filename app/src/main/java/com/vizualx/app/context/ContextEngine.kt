@@ -60,12 +60,13 @@ class ContextEngine(
         return when (obs.type) {
             ObjectType.VEHICLE -> {
                 val posText = formatPosition(obs.position)
+                val spoken = debounceSpoken("Caution. Vehicle detected $posText.", 3500L)
                 ContextEvent(
                     id = obs.id,
                     priority = EventPriority.CRITICAL,
-                    spokenText = "Caution. Vehicle detected $posText.",
+                    spokenText = spoken,
                     displayTitle = "Vehicle Alert",
-                    displayDetail = "Vehicle detected $posText (confidence: ${(obs.confidence * 100).toInt()}%)"
+                    displayDetail = "Vehicle $posText ${formatDistance(obs.approximateDistanceMeters)}"
                 )
             }
 

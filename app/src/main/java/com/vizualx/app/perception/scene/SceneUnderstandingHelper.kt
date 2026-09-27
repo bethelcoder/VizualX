@@ -110,19 +110,6 @@ class SceneUnderstandingHelper {
                             confidence = maxStairsConf.coerceAtLeast(0.70f)
                         )
                     )
-                } else {
-                    // Ambient high-confidence scene context (e.g. Room, Office, Corridor, Chair, Furniture)
-                    val topLabel = labels.maxByOrNull { it.confidence }
-                    if (topLabel != null && topLabel.confidence >= 0.65f) {
-                        onSceneInsight(
-                            SceneInsight(
-                                detectedType = ObjectType.UNKNOWN,
-                                label = topLabel.text,
-                                confidence = topLabel.confidence,
-                                isHandOrSelf = false
-                            )
-                        )
-                    }
                 }
             }
             .addOnFailureListener { e ->

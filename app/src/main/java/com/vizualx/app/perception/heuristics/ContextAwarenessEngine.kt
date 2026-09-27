@@ -23,7 +23,7 @@ data class TrackedDetection(
     var lastAlertMs: Long = 0L
 ) {
     val isConfirmed: Boolean
-        get() = confidenceWindow.size >= 2 && confidenceWindow.any { it >= 0.45f }
+        get() = confidenceWindow.size >= 3 && confidenceWindow.average() >= 0.55f
 
     val isExpanding: Boolean
         get() = areaHistory.size >= 3 && areaHistory.last() > (areaHistory.first() * 1.25f)
@@ -31,8 +31,7 @@ data class TrackedDetection(
 
 /**
  * Context Awareness Engine with Temporal Debouncing & Heuristic Scenario Classification.
- * Filters frame noise and maps raw detections into HAZARD, PATHWAY BLOCKED, PEDESTRIAN,
- * and AMBIENT OBJECT observations.
+ * Filters frame noise and maps raw detections into confirmed observations evaluated by ContextEngine.
  */
 class ContextAwarenessEngine(
     private val worldState: WorldState,
@@ -43,6 +42,12 @@ class ContextAwarenessEngine(
         private const val WINDOW_SIZE = 5
         private const val ENTITY_EXPIRY_MS = 3000L
         private const val ALERT_COOLDOWN_MS = 3500L
+
+        val RELEVANT_LABELS = setOf(
+            "person", "car", "truck", "bus", "motorcycle", "bicycle",
+            "chair", "bench", "table", "couch", "bed",
+            "backpack", "suitcase", "fire hydrant"
+        )
     }
 
     private val trackedEntities = ConcurrentHashMap<String, TrackedDetection>()
@@ -62,12 +67,15 @@ class ContextAwarenessEngine(
 
         for (detection in detections) {
             val category = detection.categories().maxByOrNull { it.score() } ?: continue
-            val label = category.categoryName().lowercase().trim()
+            val rawLabel = category.categoryName().lowercase().trim()
+            
+            // Whitelist filter: discard irrelevant classes (e.g. kite, cup, bowl, tv, vase, etc.)
+            val matchedLabel = RELEVANT_LABELS.firstOrNull { rawLabel.contains(it) } ?: continue
             val score = category.score()
             val box = detection.boundingBox() ?: RectF()
 
             // Discard false person detections caused by user holding phone / hand in view
-            if (label.contains("person") && isHandInView) {
+            if (matchedLabel.contains("person") && isHandInView) {
                 continue
             }
 
@@ -88,14 +96,14 @@ class ContextAwarenessEngine(
                 else -> 7.0f
             }
 
-            if (label.contains("person")) {
+            if (matchedLabel.contains("person")) {
                 personCountInFrame++
             }
 
             // Update or create tracked temporal entity using relative position bucket
-            val entityKey = "$label-${position.name}"
+            val entityKey = "$matchedLabel-${position.name}"
             val tracked = trackedEntities.getOrPut(entityKey) {
-                TrackedDetection(label = label)
+                TrackedDetection(label = matchedLabel)
             }
 
             tracked.lastSeenMs = now
@@ -113,23 +121,22 @@ class ContextAwarenessEngine(
                 tracked.areaHistory.removeAt(0)
             }
 
-            // Evaluate confirmed objects against context scenarios
+            // Evaluate confirmed objects against ContextEngine rules
             if (tracked.isConfirmed && (now - tracked.lastAlertMs >= ALERT_COOLDOWN_MS)) {
-                val event = evaluateScenario(tracked, position, approxDist, now)
                 tracked.lastAlertMs = now
 
-                // Emit structured observation into WorldState
+                // Emit structured observation into WorldState and evaluate event via ContextEngine
                 val obs = ObjectObservation(
                     id = UUID.randomUUID().toString(),
                     source = source,
                     confidence = score,
                     timestampMs = now,
-                    type = mapLabelToObjectType(label),
+                    type = mapLabelToObjectType(matchedLabel),
                     position = position,
                     approximateDistanceMeters = approxDist,
-                    label = label.replaceFirstChar { it.uppercase() }
+                    label = matchedLabel.replaceFirstChar { it.uppercase() }
                 )
-                worldState.updateObservation(obs)
+                val event = contextEngine.evaluate(obs)
                 onHazardDetected?.invoke(event)
             }
         }
@@ -148,80 +155,13 @@ class ContextAwarenessEngine(
         }
     }
 
-    private fun evaluateScenario(
-        entity: TrackedDetection,
-        position: RelativePosition,
-        approxDistance: Float,
-        now: Long
-    ): ContextEvent {
-        val label = entity.label
-        val posText = when (position) {
-            RelativePosition.LEFT -> "on your left"
-            RelativePosition.RIGHT -> "on your right"
-            RelativePosition.AHEAD -> "directly ahead"
-            else -> "nearby"
-        }
-
-        // 1. HAZARD SCENARIO (Approaching vehicles)
-        if (label.contains("car") || label.contains("bus") || label.contains("truck") || label.contains("motorcycle")) {
-            val isUrgent = entity.isExpanding || approxDistance < 4.0f
-            return ContextEvent(
-                id = "hazard-$now",
-                priority = EventPriority.CRITICAL,
-                spokenText = if (isUrgent) "Caution. Vehicle approaching $posText." else "Vehicle detected $posText.",
-                displayTitle = "Vehicle Hazard",
-                displayDetail = "Vehicle $posText (~${String.format("%.1f", approxDistance)}m)",
-                timestampMs = now
-            )
-        }
-
-        // 2. PATHWAY BLOCKED SCENARIO (Obstacles centered in walking corridor)
-        if (position == RelativePosition.AHEAD && approxDistance < 3.0f) {
-            if (label.contains("bicycle") || label.contains("bench") || label.contains("chair") || 
-                label.contains("fire hydrant") || label.contains("box") || label.contains("obstacle") ||
-                label.contains("table") || label.contains("couch") || label.contains("bed")) {
-                return ContextEvent(
-                    id = "blocked-$now",
-                    priority = if (approxDistance < 1.8f) EventPriority.CRITICAL else EventPriority.HIGH,
-                    spokenText = "Obstacle directly in your path.",
-                    displayTitle = "Pathway Blocked",
-                    displayDetail = "${label.replaceFirstChar { it.uppercase() }} centered in path (~${String.format("%.1f", approxDistance)}m)",
-                    timestampMs = now
-                )
-            }
-        }
-
-        // 3. PEDESTRIAN SCENARIO
-        if (label.contains("person")) {
-            return ContextEvent(
-                id = "pedestrian-$now",
-                priority = EventPriority.NORMAL,
-                spokenText = "Person $posText.",
-                displayTitle = "Pedestrian",
-                displayDetail = "Person $posText (~${String.format("%.1f", approxDistance)}m)",
-                timestampMs = now
-            )
-        }
-
-        // 4. GENERAL DETECTED OBJECTS (Logged for perception awareness, silent on TTS per "Silence is a valid state")
-        val formattedLabel = label.replaceFirstChar { it.uppercase() }
-        return ContextEvent(
-            id = "object-$now",
-            priority = EventPriority.NORMAL,
-            spokenText = null, // "Silence is a valid state" — background items appear in UI feed without audio spam
-            displayTitle = formattedLabel,
-            displayDetail = "$formattedLabel $posText (~${String.format("%.1f", approxDistance)}m)",
-            timestampMs = now
-        )
-    }
-
     private fun mapLabelToObjectType(label: String): ObjectType {
         return when {
             label.contains("person") -> ObjectType.PERSON
             label.contains("car") || label.contains("bus") || label.contains("truck") || label.contains("motorcycle") -> ObjectType.VEHICLE
-            label.contains("bicycle") || label.contains("bench") || label.contains("chair") || label.contains("table") -> ObjectType.OBSTACLE
+            label.contains("bicycle") || label.contains("bench") || label.contains("chair") || label.contains("table") || label.contains("couch") || label.contains("bed") -> ObjectType.OBSTACLE
             label.contains("door") -> ObjectType.DOOR
-            else -> ObjectType.OBSTACLE
+            else -> ObjectType.UNKNOWN
         }
     }
 

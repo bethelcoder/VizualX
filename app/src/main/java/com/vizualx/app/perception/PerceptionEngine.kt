@@ -77,7 +77,16 @@ class PerceptionEngine(
         }
     }
 
+    private var lastFrameProcessedTimestamp = 0L
+    private val frameThrottleMs = 200L // 5 FPS for thermal efficiency and frame rate control
+
     fun processCameraFrame(imageProxy: ImageProxy, source: ObservationSource = ObservationSource.REAR_CAMERA) {
+        val currentTimestamp = System.currentTimeMillis()
+        if (currentTimestamp - lastFrameProcessedTimestamp < frameThrottleMs) {
+            return
+        }
+        lastFrameProcessedTimestamp = currentTimestamp
+
         try {
             val rotation = imageProxy.imageInfo.rotationDegrees
             // Convert to standalone in-memory Bitmap synchronously so ImageProxy can be safely closed
@@ -125,19 +134,6 @@ class PerceptionEngine(
                 type = insight.detectedType,
                 position = RelativePosition.AHEAD,
                 approximateDistanceMeters = 3.0f,
-                label = insight.label
-            )
-            emitObservation(obs)
-        } else if (insight.label.isNotBlank() && insight.detectedType == ObjectType.UNKNOWN) {
-            // General prominent scene label (e.g. Room, Office, Corridor)
-            val obs = ObjectObservation(
-                id = "scene-ambient-${UUID.randomUUID()}",
-                source = source,
-                confidence = insight.confidence,
-                timestampMs = now,
-                type = ObjectType.UNKNOWN,
-                position = RelativePosition.AHEAD,
-                approximateDistanceMeters = null,
                 label = insight.label
             )
             emitObservation(obs)

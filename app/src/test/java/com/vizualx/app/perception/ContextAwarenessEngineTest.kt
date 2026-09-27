@@ -35,16 +35,26 @@ class ContextAwarenessEngineTest {
     }
 
     @Test
-    fun `tracked detection requires at least 2 confirmed frames to confirm entity`() {
+    fun `tracked detection requires at least 3 frames with average confidence above 55 percent to confirm entity`() {
         val entity = TrackedDetection(label = "car")
 
-        // Frame 1
+        // Frame 1 and 2
         entity.confidenceWindow.add(0.85f)
-        assertFalse("Entity should not be confirmed with only 1 frame", entity.isConfirmed)
+        entity.confidenceWindow.add(0.90f)
+        assertFalse("Entity should not be confirmed with only 2 frames", entity.isConfirmed)
 
-        // Frame 2
-        entity.confidenceWindow.add(0.92f)
-        assertTrue("Entity should be confirmed after 2 consecutive frames", entity.isConfirmed)
+        // Frame 3 (high confidence -> average > 0.55)
+        entity.confidenceWindow.add(0.80f)
+        assertTrue("Entity should be confirmed after 3 frames with average >= 0.55", entity.isConfirmed)
+    }
+
+    @Test
+    fun `tracked detection rejects entity if average confidence is below threshold`() {
+        val entity = TrackedDetection(label = "car")
+
+        // 3 frames with low average confidence
+        entity.confidenceWindow.addAll(listOf(0.40f, 0.45f, 0.48f))
+        assertFalse("Entity should not be confirmed when average is below 0.55", entity.isConfirmed)
     }
 
     @Test
@@ -54,5 +64,14 @@ class ContextAwarenessEngineTest {
         // Expanding bounding box area over time
         entity.areaHistory.addAll(listOf(0.05f, 0.08f, 0.12f))
         assertTrue("Entity should detect expansion", entity.isExpanding)
+    }
+
+    @Test
+    fun `relevant labels whitelist contains essential safety and navigation classes`() {
+        assertTrue(ContextAwarenessEngine.RELEVANT_LABELS.contains("person"))
+        assertTrue(ContextAwarenessEngine.RELEVANT_LABELS.contains("car"))
+        assertTrue(ContextAwarenessEngine.RELEVANT_LABELS.contains("chair"))
+        assertFalse(ContextAwarenessEngine.RELEVANT_LABELS.contains("kite"))
+        assertFalse(ContextAwarenessEngine.RELEVANT_LABELS.contains("wine glass"))
     }
 }
