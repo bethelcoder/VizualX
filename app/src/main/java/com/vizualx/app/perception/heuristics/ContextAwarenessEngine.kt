@@ -83,11 +83,7 @@ class ContextAwarenessEngine(
             val heightRatio = box.height() / imageHeight.toFloat()
             val areaRatio = (box.width() * box.height()) / (imageWidth * imageHeight).toFloat()
 
-            val position = when {
-                centerX < 0.35f -> RelativePosition.LEFT
-                centerX > 0.65f -> RelativePosition.RIGHT
-                else -> RelativePosition.AHEAD
-            }
+            val position = PerceptionFilter.calculatePosition(centerX)
 
             val approxDist = when {
                 heightRatio > 0.60f -> 1.2f

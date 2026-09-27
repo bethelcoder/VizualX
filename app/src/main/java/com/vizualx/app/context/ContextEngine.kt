@@ -101,17 +101,30 @@ class ContextEngine(
                 )
             }
             ObjectType.OBSTACLE -> {
+                val isAhead = obs.position == RelativePosition.AHEAD
                 val isImmediate = (obs.approximateDistanceMeters ?: 5f) < 2.0f
-                val priority = if (isImmediate) EventPriority.CRITICAL else EventPriority.HIGH
-                val rawSpoken = if (isImmediate) "Obstacle directly in your path." else "Obstacle ahead."
-                val spoken = debounceSpoken(rawSpoken, 3500L)
-                ContextEvent(
-                    id = obs.id,
-                    priority = priority,
-                    spokenText = spoken,
-                    displayTitle = if (obs.label.isNotBlank() && obs.label != "OBSTACLE") obs.label.replaceFirstChar { it.uppercase() } else "Obstacle",
-                    displayDetail = "${obs.label} ${formatDistance(obs.approximateDistanceMeters)}"
-                )
+                if (!isAhead && !isImmediate) {
+                    // Object is on the side (left/right) - user will safely walk past it.
+                    // Keep speech channel completely silent!
+                    ContextEvent(
+                        id = obs.id,
+                        priority = EventPriority.LOW,
+                        spokenText = null,
+                        displayTitle = if (obs.label.isNotBlank() && obs.label != "OBSTACLE") obs.label.replaceFirstChar { it.uppercase() } else "Obstacle",
+                        displayDetail = "${obs.label} ${formatPosition(obs.position)} ${formatDistance(obs.approximateDistanceMeters)}"
+                    )
+                } else {
+                    val priority = if (isImmediate) EventPriority.CRITICAL else EventPriority.HIGH
+                    val rawSpoken = if (isImmediate) "Obstacle directly in your path." else "Obstacle ahead."
+                    val spoken = debounceSpoken(rawSpoken, 3500L)
+                    ContextEvent(
+                        id = obs.id,
+                        priority = priority,
+                        spokenText = spoken,
+                        displayTitle = if (obs.label.isNotBlank() && obs.label != "OBSTACLE") obs.label.replaceFirstChar { it.uppercase() } else "Obstacle",
+                        displayDetail = "${obs.label} ${formatDistance(obs.approximateDistanceMeters)}"
+                    )
+                }
             }
             ObjectType.CROSSWALK -> {
                 val spoken = debounceSpoken("Pedestrian crossing ahead.", 5000L)
@@ -134,15 +147,28 @@ class ContextEngine(
                 )
             }
             ObjectType.PERSON -> {
-                val pos = formatPosition(obs.position)
-                val spoken = debounceSpoken("Person $pos.", 3500L)
-                ContextEvent(
-                    id = obs.id,
-                    priority = EventPriority.NORMAL,
-                    spokenText = spoken,
-                    displayTitle = "Person",
-                    displayDetail = "Person $pos ${formatDistance(obs.approximateDistanceMeters)}"
-                )
+                val isAhead = obs.position == RelativePosition.AHEAD
+                val isClose = (obs.approximateDistanceMeters ?: 5f) <= 2.5f
+                if (!isAhead && !isClose) {
+                    // Person is on the side and not directly blocking - silent on speech channel
+                    ContextEvent(
+                        id = obs.id,
+                        priority = EventPriority.LOW,
+                        spokenText = null,
+                        displayTitle = "Person",
+                        displayDetail = "Person ${formatPosition(obs.position)} ${formatDistance(obs.approximateDistanceMeters)}"
+                    )
+                } else {
+                    val pos = formatPosition(obs.position)
+                    val spoken = debounceSpoken("Person $pos.", 4000L)
+                    ContextEvent(
+                        id = obs.id,
+                        priority = EventPriority.NORMAL,
+                        spokenText = spoken,
+                        displayTitle = "Person",
+                        displayDetail = "Person $pos ${formatDistance(obs.approximateDistanceMeters)}"
+                    )
+                }
             }
             ObjectType.SIGN -> {
                 ContextEvent(

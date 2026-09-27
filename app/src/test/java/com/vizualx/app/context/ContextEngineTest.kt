@@ -92,4 +92,82 @@ class ContextEngineTest {
         assertEquals(EventPriority.CRITICAL, event.priority)
         assertNotNull(event.spokenText)
     }
+
+    @Test
+    fun `obstacle directly ahead within 2m produces CRITICAL priority and path alert`() {
+        val obs = ObjectObservation(
+            id = "chair-1",
+            source = ObservationSource.REAR_CAMERA,
+            confidence = 0.85f,
+            timestampMs = System.currentTimeMillis(),
+            type = ObjectType.OBSTACLE,
+            position = RelativePosition.AHEAD,
+            approximateDistanceMeters = 1.5f,
+            label = "Chair"
+        )
+
+        val event = contextEngine.evaluate(obs)
+
+        assertEquals(EventPriority.CRITICAL, event.priority)
+        assertNotNull(event.spokenText)
+        assertEquals("Obstacle directly in your path.", event.spokenText)
+    }
+
+    @Test
+    fun `obstacle on side remains silent and has LOW priority`() {
+        val obs = ObjectObservation(
+            id = "bench-left",
+            source = ObservationSource.REAR_CAMERA,
+            confidence = 0.85f,
+            timestampMs = System.currentTimeMillis(),
+            type = ObjectType.OBSTACLE,
+            position = RelativePosition.LEFT,
+            approximateDistanceMeters = 3.5f,
+            label = "Bench"
+        )
+
+        val event = contextEngine.evaluate(obs)
+
+        assertEquals(EventPriority.LOW, event.priority)
+        assertNull("Side obstacles should not produce speech alerts", event.spokenText)
+    }
+
+    @Test
+    fun `person on side and far away remains silent`() {
+        val obs = ObjectObservation(
+            id = "person-right",
+            source = ObservationSource.REAR_CAMERA,
+            confidence = 0.88f,
+            timestampMs = System.currentTimeMillis(),
+            type = ObjectType.PERSON,
+            position = RelativePosition.RIGHT,
+            approximateDistanceMeters = 4.0f,
+            label = "Person"
+        )
+
+        val event = contextEngine.evaluate(obs)
+
+        assertEquals(EventPriority.LOW, event.priority)
+        assertNull("Side persons at distance should remain silent", event.spokenText)
+    }
+
+    @Test
+    fun `person directly ahead produces spoken alert`() {
+        val obs = ObjectObservation(
+            id = "person-ahead",
+            source = ObservationSource.REAR_CAMERA,
+            confidence = 0.88f,
+            timestampMs = System.currentTimeMillis(),
+            type = ObjectType.PERSON,
+            position = RelativePosition.AHEAD,
+            approximateDistanceMeters = 2.0f,
+            label = "Person"
+        )
+
+        val event = contextEngine.evaluate(obs)
+
+        assertEquals(EventPriority.NORMAL, event.priority)
+        assertNotNull(event.spokenText)
+        assertEquals("Person ahead.", event.spokenText)
+    }
 }
