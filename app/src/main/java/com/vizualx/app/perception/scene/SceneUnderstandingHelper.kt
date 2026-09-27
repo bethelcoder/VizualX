@@ -47,10 +47,9 @@ class SceneUnderstandingHelper {
         }
         lastSceneAnalysisTime = now
 
-        // 1. Process Scene Labels (Doors, Stairs, Hand, Hallway)
+        // 1. Process Scene Labels (Doors, Stairs)
         labeler.process(inputImage)
             .addOnSuccessListener { labels ->
-                var isHand = false
                 var foundDoor = false
                 var foundStairs = false
                 var primaryDoorLabel = "Doorway"
@@ -62,11 +61,6 @@ class SceneUnderstandingHelper {
                     val text = label.text.lowercase()
                     val conf = label.confidence
 
-                    if (text.contains("hand") || text.contains("arm") || text.contains("finger") || 
-                        text.contains("gesture") || text.contains("palm") || text.contains("thumb") || 
-                        text.contains("wrist") || text.contains("nail") || text.contains("skin")) {
-                        isHand = true
-                    }
                     if (text.contains("door") || text.contains("doorway") || text.contains("entrance") || 
                         text.contains("gate") || text.contains("portal") || text.contains("archway")) {
                         foundDoor = true
@@ -85,16 +79,7 @@ class SceneUnderstandingHelper {
                     }
                 }
 
-                if (isHand) {
-                    onSceneInsight(
-                        SceneInsight(
-                            detectedType = ObjectType.UNKNOWN,
-                            label = "Hand in view",
-                            confidence = 0.90f,
-                            isHandOrSelf = true
-                        )
-                    )
-                } else if (foundDoor) {
+                if (foundDoor) {
                     onSceneInsight(
                         SceneInsight(
                             detectedType = ObjectType.DOOR,

@@ -35,26 +35,25 @@ class ContextAwarenessEngineTest {
     }
 
     @Test
-    fun `tracked detection requires at least 3 frames with average confidence above 55 percent to confirm entity`() {
+    fun `tracked detection requires at least 2 frames with average confidence above 40 percent to confirm entity`() {
         val entity = TrackedDetection(label = "car")
 
-        // Frame 1 and 2
+        // Frame 1
         entity.confidenceWindow.add(0.85f)
-        entity.confidenceWindow.add(0.90f)
-        assertFalse("Entity should not be confirmed with only 2 frames", entity.isConfirmed)
+        assertFalse("Entity should not be confirmed with only 1 frame", entity.isConfirmed)
 
-        // Frame 3 (high confidence -> average > 0.55)
+        // Frame 2 (average > 0.40)
         entity.confidenceWindow.add(0.80f)
-        assertTrue("Entity should be confirmed after 3 frames with average >= 0.55", entity.isConfirmed)
+        assertTrue("Entity should be confirmed after 2 frames with average >= 0.40", entity.isConfirmed)
     }
 
     @Test
     fun `tracked detection rejects entity if average confidence is below threshold`() {
         val entity = TrackedDetection(label = "car")
 
-        // 3 frames with low average confidence
-        entity.confidenceWindow.addAll(listOf(0.40f, 0.45f, 0.48f))
-        assertFalse("Entity should not be confirmed when average is below 0.55", entity.isConfirmed)
+        // 2 frames with very low average confidence
+        entity.confidenceWindow.addAll(listOf(0.20f, 0.35f))
+        assertFalse("Entity should not be confirmed when average is below 0.40", entity.isConfirmed)
     }
 
     @Test

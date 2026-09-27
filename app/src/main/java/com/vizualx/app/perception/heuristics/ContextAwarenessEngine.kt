@@ -23,15 +23,15 @@ data class TrackedDetection(
     var lastAlertMs: Long = 0L
 ) {
     val isConfirmed: Boolean
-        get() = confidenceWindow.size >= 3 && confidenceWindow.average() >= 0.55f
+        get() = confidenceWindow.size >= 2 && confidenceWindow.average() >= 0.40f
 
     val isExpanding: Boolean
         get() = areaHistory.size >= 3 && areaHistory.last() > (areaHistory.first() * 1.25f)
 }
 
 /**
- * Context Awareness Engine with Temporal Debouncing & Heuristic Scenario Classification.
- * Filters frame noise and maps raw detections into confirmed observations evaluated by ContextEngine.
+ * Context Awareness Engine with Temporal Tracking & Heuristic Scenario Classification.
+ * Filters frame noise, tracks entities over time, and evaluates observations through ContextEngine.
  */
 class ContextAwarenessEngine(
     private val worldState: WorldState,
@@ -40,13 +40,13 @@ class ContextAwarenessEngine(
 ) {
     companion object {
         private const val WINDOW_SIZE = 5
-        private const val ENTITY_EXPIRY_MS = 3000L
-        private const val ALERT_COOLDOWN_MS = 3500L
+        private const val ENTITY_EXPIRY_MS = 2500L
+        private const val UI_EMIT_THROTTLE_MS = 400L
 
         val RELEVANT_LABELS = setOf(
             "person", "car", "truck", "bus", "motorcycle", "bicycle",
             "chair", "bench", "table", "couch", "bed",
-            "backpack", "suitcase", "fire hydrant"
+            "backpack", "suitcase", "fire hydrant", "door", "stairs"
         )
     }
 
@@ -56,8 +56,7 @@ class ContextAwarenessEngine(
         result: ObjectDetectorResult,
         imageWidth: Int = 640,
         imageHeight: Int = 480,
-        source: ObservationSource = ObservationSource.REAR_CAMERA,
-        isHandInView: Boolean = false
+        source: ObservationSource = ObservationSource.REAR_CAMERA
     ) {
         val now = System.currentTimeMillis()
         pruneStaleEntities(now)
@@ -73,11 +72,6 @@ class ContextAwarenessEngine(
             val matchedLabel = RELEVANT_LABELS.firstOrNull { rawLabel.contains(it) } ?: continue
             val score = category.score()
             val box = detection.boundingBox() ?: RectF()
-
-            // Discard false person detections caused by user holding phone / hand in view
-            if (matchedLabel.contains("person") && isHandInView) {
-                continue
-            }
 
             val centerX = box.centerX() / imageWidth.toFloat()
             val heightRatio = box.height() / imageHeight.toFloat()
@@ -118,7 +112,7 @@ class ContextAwarenessEngine(
             }
 
             // Evaluate confirmed objects against ContextEngine rules
-            if (tracked.isConfirmed && (now - tracked.lastAlertMs >= ALERT_COOLDOWN_MS)) {
+            if (tracked.isConfirmed && (now - tracked.lastAlertMs >= UI_EMIT_THROTTLE_MS)) {
                 tracked.lastAlertMs = now
 
                 // Emit structured observation into WorldState and evaluate event via ContextEngine
@@ -138,7 +132,7 @@ class ContextAwarenessEngine(
         }
 
         // Scenario: CROWD DETECTION
-        if (personCountInFrame >= 3 && !isHandInView) {
+        if (personCountInFrame >= 3) {
             val crowdEvent = ContextEvent(
                 id = "crowd-$now",
                 priority = EventPriority.HIGH,
@@ -157,6 +151,7 @@ class ContextAwarenessEngine(
             label.contains("car") || label.contains("bus") || label.contains("truck") || label.contains("motorcycle") -> ObjectType.VEHICLE
             label.contains("bicycle") || label.contains("bench") || label.contains("chair") || label.contains("table") || label.contains("couch") || label.contains("bed") -> ObjectType.OBSTACLE
             label.contains("door") -> ObjectType.DOOR
+            label.contains("stair") -> ObjectType.STAIRS_DOWN
             else -> ObjectType.UNKNOWN
         }
     }

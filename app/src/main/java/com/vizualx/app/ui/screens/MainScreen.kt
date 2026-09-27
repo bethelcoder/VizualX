@@ -263,7 +263,10 @@ fun MainScreen(
                     modifier = Modifier.padding(bottom = 6.dp)
                 )
 
-                EventStreamList(events = recentEvents)
+                EventStreamList(
+                    events = recentEvents,
+                    modifier = Modifier.weight(1f)
+                )
             }
 
             // Automated Countdown Overlay
@@ -636,10 +639,13 @@ fun SimulationChip(
 }
 
 @Composable
-fun EventStreamList(events: List<ContextEvent>) {
+fun EventStreamList(
+    events: List<ContextEvent>,
+    modifier: Modifier = Modifier
+) {
     if (events.isEmpty()) {
         Box(
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxWidth()
                 .padding(20.dp),
             contentAlignment = Alignment.Center
@@ -652,11 +658,11 @@ fun EventStreamList(events: List<ContextEvent>) {
         }
     } else {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
-            items(events) { event ->
+            items(events, key = { it.id }) { event ->
                 EventCard(event = event)
             }
         }
@@ -673,6 +679,11 @@ fun EventCard(event: ContextEvent) {
         EventPriority.IGNORE -> Triple(TextTertiary, LightSurfaceVariant, "IGNORE")
     }
 
+    val timeFormatted = remember(event.timestampMs) {
+        val sdf = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+        sdf.format(java.util.Date(event.timestampMs))
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -687,11 +698,20 @@ fun EventCard(event: ContextEvent) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = event.displayTitle,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = TextPrimary
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = event.displayTitle,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = timeFormatted,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextTertiary
+                    )
+                }
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = event.displayDetail,
                     style = MaterialTheme.typography.bodyMedium,

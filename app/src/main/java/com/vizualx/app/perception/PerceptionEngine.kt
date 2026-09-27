@@ -54,17 +54,14 @@ class PerceptionEngine(
     var mediaPipeHelper: MediaPipeObjectDetectorHelper? = null
         private set
 
-    // Scene Understanding Helper (ML Kit Image Labeling for Doors/Stairs/Hand + Text OCR)
+    // Scene Understanding Helper (ML Kit Image Labeling for Doors/Stairs + Text OCR)
     private val sceneHelper = SceneUnderstandingHelper()
-
-    private var isHandCurrentlyInView = false
-    private var lastHandSeenTime = 0L
 
     init {
         if (context != null) {
             mediaPipeHelper = MediaPipeObjectDetectorHelper(
                 context = context,
-                threshold = 0.45f,
+                threshold = 0.40f,
                 maxResults = 7,
                 modelName = "efficientdet_lite0.tflite",
                 resultListener = { result, mpImage ->
@@ -92,7 +89,7 @@ class PerceptionEngine(
             // Convert to standalone in-memory Bitmap synchronously so ImageProxy can be safely closed
             val bitmap = imageProxy.toBitmap()
 
-            // 1. Run Scene Understanding (Doors, Stairs, Signs, Hand filter)
+            // 1. Run Scene Understanding (Doors, Stairs, Signs)
             val inputImage = InputImage.fromBitmap(bitmap, rotation)
             sceneHelper.analyzeScene(inputImage) { insight ->
                 handleSceneInsight(insight, source)
@@ -111,16 +108,6 @@ class PerceptionEngine(
 
     private fun handleSceneInsight(insight: SceneInsight, source: ObservationSource) {
         val now = System.currentTimeMillis()
-
-        if (insight.isHandOrSelf) {
-            isHandCurrentlyInView = true
-            lastHandSeenTime = now
-            return // Suppress hand from generating false person alerts
-        }
-
-        if (now - lastHandSeenTime > 1500L) {
-            isHandCurrentlyInView = false
-        }
 
         if (insight.detectedType == ObjectType.DOOR || 
             insight.detectedType == ObjectType.STAIRS_DOWN || 
@@ -146,17 +133,11 @@ class PerceptionEngine(
         imageHeight: Int,
         source: ObservationSource = ObservationSource.REAR_CAMERA
     ) {
-        val now = System.currentTimeMillis()
-        if (now - lastHandSeenTime < 1500L) {
-            isHandCurrentlyInView = true
-        }
-
         contextAwarenessEngine.processDetectionResult(
             result = result,
             imageWidth = imageWidth,
             imageHeight = imageHeight,
-            source = source,
-            isHandInView = isHandCurrentlyInView
+            source = source
         )
     }
 
