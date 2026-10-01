@@ -1,5 +1,6 @@
 package com.vizualx.app.ai
 
+import android.graphics.Bitmap
 import com.vizualx.app.context.WorldState
 import com.vizualx.app.perception.models.ObjectObservation
 
@@ -10,10 +11,12 @@ sealed class AIQueryResult {
 }
 
 class AIOrchestrator(
-    private val worldState: WorldState
+    private val worldState: WorldState,
+    private val geminiApiClient: GeminiApiClient? = null,
+    private val localLlmBrain: LocalLlmBrain? = null
 ) {
 
-    suspend fun processQuery(query: String): AIQueryResult {
+    suspend fun processQuery(query: String, currentFrame: Bitmap? = null): AIQueryResult {
         val lower = query.lowercase().trim()
 
         if (lower.contains("read this") || lower.contains("read text") || 
@@ -35,6 +38,15 @@ class AIOrchestrator(
                 .trim()
             if (destination.isNotBlank()) {
                 return AIQueryResult.NavigationRequest(destination)
+            }
+        }
+
+        // 1. Try Google Gemini Multimodal Vision if frame is available and Gemini is configured
+        if (currentFrame != null && geminiApiClient != null && geminiApiClient.isConfigured) {
+            val geminiResponse = geminiApiClient.analyzeImageWithPrompt(currentFrame, query)
+            if (!geminiResponse.isNullOrBlank()) {
+                val normalized = com.vizualx.app.speech.SpeechNormalizer.normalizeForSpeech(geminiResponse)
+                return AIQueryResult.TextResponse(normalized)
             }
         }
 

@@ -78,13 +78,19 @@ class MainActivity : ComponentActivity() {
         capabilityReport = capabilityDetector.detectCapabilities()
 
         perceptionEngine = PerceptionEngine(context = this)
-        aiOrchestrator = AIOrchestrator(perceptionEngine.worldState)
+        val geminiClient = com.vizualx.app.ai.GeminiApiClient(this)
+        aiOrchestrator = AIOrchestrator(
+            worldState = perceptionEngine.worldState,
+            geminiApiClient = geminiClient,
+            localLlmBrain = perceptionEngine.localLlmBrain
+        )
         hapticManager = HapticFeedbackManager(this)
         navigationManager = NavigationManager(this)
 
         speechManager = SpeechManager(this) { userQuery ->
             lifecycleScope.launch {
-                when (val result = aiOrchestrator.processQuery(userQuery)) {
+                val currentFrame = perceptionEngine.latestBitmap
+                when (val result = aiOrchestrator.processQuery(userQuery, currentFrame)) {
                     is AIQueryResult.TriggerAssistiveReading -> {
                         speechManager.speak("Reading text in front of you.", EventPriority.HIGH)
                         val text = perceptionEngine.readAloudCurrentView()

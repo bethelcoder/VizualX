@@ -153,7 +153,7 @@ class ContextEngineTest {
     }
 
     @Test
-    fun `person directly ahead produces spoken alert`() {
+    fun `person directly ahead within 1_5m produces spoken alert`() {
         val obs = ObjectObservation(
             id = "person-ahead",
             source = ObservationSource.REAR_CAMERA,
@@ -161,7 +161,7 @@ class ContextEngineTest {
             timestampMs = System.currentTimeMillis(),
             type = ObjectType.PERSON,
             position = RelativePosition.AHEAD,
-            approximateDistanceMeters = 2.0f,
+            approximateDistanceMeters = 1.2f,
             label = "Person"
         )
 
@@ -169,6 +169,42 @@ class ContextEngineTest {
 
         assertEquals(EventPriority.NORMAL, event.priority)
         assertNotNull(event.spokenText)
-        assertEquals("Pedestrian ahead. Proceed cautiously.", event.spokenText)
+        assertEquals("Pedestrian directly ahead. Proceed cautiously.", event.spokenText)
+    }
+
+    @Test
+    fun `hazard sign produces spoken warning with critical priority`() {
+        val obs = ObjectObservation(
+            id = "sign-hazard",
+            source = ObservationSource.REAR_CAMERA,
+            confidence = 0.90f,
+            timestampMs = System.currentTimeMillis(),
+            type = ObjectType.SIGN,
+            position = RelativePosition.AHEAD,
+            label = "Sign: Caution Wet Floor"
+        )
+
+        val event = contextEngine.evaluate(obs)
+
+        assertEquals(EventPriority.CRITICAL, event.priority)
+        assertEquals("Caution, sign indicates: Caution Wet Floor.", event.spokenText)
+    }
+
+    @Test
+    fun `ambient sign without hazard keywords remains silent on auto stream`() {
+        val obs = ObjectObservation(
+            id = "sign-ambient",
+            source = ObservationSource.REAR_CAMERA,
+            confidence = 0.90f,
+            timestampMs = System.currentTimeMillis(),
+            type = ObjectType.SIGN,
+            position = RelativePosition.AHEAD,
+            label = "Sign: Coffee Shop Open 8am"
+        )
+
+        val event = contextEngine.evaluate(obs)
+
+        assertEquals(EventPriority.LOW, event.priority)
+        assertNull("Ambient signs should not produce automatic speech spam", event.spokenText)
     }
 }
