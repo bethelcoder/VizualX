@@ -46,13 +46,15 @@ class LocalLlmBrain(
         const val ASSET_MODEL_FILE_NAME = "gemma-2b-it-gpu.bin"
 
         /**
-         * Exact required system prompt template string.
+         * Action-oriented system prompt template for blind navigation.
+         * Enforces directive physical actions (Stop, Slow down, Step aside, Sweep cane)
+         * and strictly forbids inaccurate spatial directions (left/right).
          */
         const val SYSTEM_PROMPT_TEMPLATE =
-            "You are the auditory brain for a blind user. Summarize these detected objects into one short, active warning under 8 words. Ignore background static. Tell them only what to avoid or what is directly ahead. Input objects: %s."
+            "You are the mobility navigator for a blind user. Convert detected obstacles ahead into one immediate, directive action command under 8 words. Never say left or right. Tell the user exactly what physical action to take (e.g., 'Stop immediately, car moving ahead', 'Slow down, crowd blocking path', 'Obstacle close, sweep cane', 'Stop, descending stairs ahead'). Input obstacles: %s."
 
         /**
-         * Formats the detected objects list into the strict System Prompt.
+         * Formats the detected objects list into the strict Action Prompt.
          *
          * @param objects List of prioritized objects from spatial filtering.
          * @return Fully formatted system prompt string.
@@ -78,7 +80,7 @@ class LocalLlmBrain(
          */
         fun sanitizeResponse(rawOutput: String): String {
             var clean = rawOutput.trim()
-                .replace(Regex("(?i)^(warning:|alert:|caution:|system:|model:)\\s*"), "")
+                .replace(Regex("(?i)^(action:|warning:|alert:|caution:|system:|model:)\\s*"), "")
                 .replace("\"", "")
                 .replace("\n", " ")
                 .trim()
@@ -94,13 +96,27 @@ class LocalLlmBrain(
         }
 
         /**
-         * Deterministic, high-speed fallback generator ensuring immediate safety-critical warning
-         * even when the LLM binary is offline.
+         * Deterministic, high-speed fallback generator ensuring immediate directive action commands
+         * for blind navigation even when the LLM binary is offline.
          */
         fun generateDeterministicFallback(objects: List<ProcessedObject>): String {
             val closest = objects.minByOrNull { it.relativeDistance } ?: return ""
-            val distanceStr = if (closest.relativeDistance <= 1.5f) "directly ahead" else "approaching"
-            return "Caution: ${closest.label} $distanceStr."
+            val lower = closest.label.lowercase()
+
+            return when {
+                lower.contains("car") || lower.contains("bus") || lower.contains("truck") || lower.contains("motorcycle") ->
+                    "Stop immediately. Vehicle moving ahead."
+                lower.contains("stair") ->
+                    "Stop. Descending stairs ahead, check cane."
+                lower.contains("door") || lower.contains("entrance") ->
+                    "Entrance ahead. Path open."
+                lower.contains("person") ->
+                    if (objects.size >= 3) "Crowd blocking path. Slow down." else "Pedestrian ahead. Proceed cautiously."
+                closest.relativeDistance <= 1.5f ->
+                    "Obstacle close. Slow down, sweep cane."
+                else ->
+                    "Obstacle ahead. Proceed cautiously."
+            }
         }
     }
 

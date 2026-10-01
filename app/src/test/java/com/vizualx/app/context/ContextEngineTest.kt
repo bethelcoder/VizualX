@@ -39,7 +39,7 @@ class ContextEngineTest {
 
         assertEquals(EventPriority.CRITICAL, event.priority)
         assertNotNull(event.spokenText)
-        assertEquals("Caution. Vehicle detected on your right.", event.spokenText)
+        assertEquals("Stop immediately. Vehicle moving ahead.", event.spokenText)
     }
 
     @Test
@@ -56,7 +56,7 @@ class ContextEngineTest {
         val event = contextEngine.evaluate(obs)
 
         assertEquals(EventPriority.CRITICAL, event.priority)
-        assertEquals("Caution. Stairs going down directly ahead.", event.spokenText)
+        assertEquals("Stop. Descending stairs ahead, check cane.", event.spokenText)
     }
 
     @Test
@@ -91,6 +91,7 @@ class ContextEngineTest {
 
         assertEquals(EventPriority.CRITICAL, event.priority)
         assertNotNull(event.spokenText)
+        assertEquals("Emergency siren nearby. Stop and stand clear.", event.spokenText)
     }
 
     @Test
@@ -110,7 +111,7 @@ class ContextEngineTest {
 
         assertEquals(EventPriority.CRITICAL, event.priority)
         assertNotNull(event.spokenText)
-        assertEquals("Obstacle directly in your path.", event.spokenText)
+        assertEquals("Obstacle close. Slow down, sweep cane.", event.spokenText)
     }
 
     @Test
@@ -168,6 +169,6 @@ class ContextEngineTest {
 
         assertEquals(EventPriority.NORMAL, event.priority)
         assertNotNull(event.spokenText)
-        assertEquals("Person ahead.", event.spokenText)
+        assertEquals("Pedestrian ahead. Proceed cautiously.", event.spokenText)
     }
 }

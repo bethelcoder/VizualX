@@ -59,19 +59,18 @@ class ContextEngine(
     private fun evaluateObject(obs: ObjectObservation): ContextEvent {
         return when (obs.type) {
             ObjectType.VEHICLE -> {
-                val posText = formatPosition(obs.position)
-                val spoken = debounceSpoken("Caution. Vehicle detected $posText.", 3500L)
+                val spoken = debounceSpoken("Stop immediately. Vehicle moving ahead.", 3500L)
                 ContextEvent(
                     id = obs.id,
                     priority = EventPriority.CRITICAL,
                     spokenText = spoken,
                     displayTitle = "Vehicle Alert",
-                    displayDetail = "Vehicle $posText ${formatDistance(obs.approximateDistanceMeters)}"
+                    displayDetail = "Vehicle moving ahead ${formatDistance(obs.approximateDistanceMeters)}"
                 )
             }
 
             ObjectType.DOOR -> {
-                val spoken = debounceSpoken("Doorway detected ahead.", 5000L)
+                val spoken = debounceSpoken("Entrance ahead. Path open.", 5000L)
                 ContextEvent(
                     id = obs.id,
                     priority = EventPriority.HIGH,
@@ -81,7 +80,7 @@ class ContextEngine(
                 )
             }
             ObjectType.STAIRS_DOWN -> {
-                val spoken = debounceSpoken("Caution. Stairs going down directly ahead.", 4000L)
+                val spoken = debounceSpoken("Stop. Descending stairs ahead, check cane.", 4000L)
                 ContextEvent(
                     id = obs.id,
                     priority = EventPriority.CRITICAL,
@@ -91,7 +90,7 @@ class ContextEngine(
                 )
             }
             ObjectType.STAIRS_UP -> {
-                val spoken = debounceSpoken("Stairs going up ahead.", 4000L)
+                val spoken = debounceSpoken("Stairs ascending ahead, prepare step.", 4000L)
                 ContextEvent(
                     id = obs.id,
                     priority = EventPriority.HIGH,
@@ -104,18 +103,18 @@ class ContextEngine(
                 val isAhead = obs.position == RelativePosition.AHEAD
                 val isImmediate = (obs.approximateDistanceMeters ?: 5f) < 2.0f
                 if (!isAhead && !isImmediate) {
-                    // Object is on the side (left/right) - user will safely walk past it.
+                    // Object is on the periphery - user will safely walk past it.
                     // Keep speech channel completely silent!
                     ContextEvent(
                         id = obs.id,
                         priority = EventPriority.LOW,
                         spokenText = null,
                         displayTitle = if (obs.label.isNotBlank() && obs.label != "OBSTACLE") obs.label.replaceFirstChar { it.uppercase() } else "Obstacle",
-                        displayDetail = "${obs.label} ${formatPosition(obs.position)} ${formatDistance(obs.approximateDistanceMeters)}"
+                        displayDetail = "${obs.label} ${formatDistance(obs.approximateDistanceMeters)}"
                     )
                 } else {
                     val priority = if (isImmediate) EventPriority.CRITICAL else EventPriority.HIGH
-                    val rawSpoken = if (isImmediate) "Obstacle directly in your path." else "Obstacle ahead."
+                    val rawSpoken = if (isImmediate) "Obstacle close. Slow down, sweep cane." else "Obstacle ahead. Proceed cautiously."
                     val spoken = debounceSpoken(rawSpoken, 3500L)
                     ContextEvent(
                         id = obs.id,
@@ -127,7 +126,7 @@ class ContextEngine(
                 }
             }
             ObjectType.CROSSWALK -> {
-                val spoken = debounceSpoken("Pedestrian crossing ahead.", 5000L)
+                val spoken = debounceSpoken("Crosswalk ahead. Stop, listen for traffic.", 5000L)
                 ContextEvent(
                     id = obs.id,
                     priority = EventPriority.HIGH,
@@ -156,17 +155,16 @@ class ContextEngine(
                         priority = EventPriority.LOW,
                         spokenText = null,
                         displayTitle = "Person",
-                        displayDetail = "Person ${formatPosition(obs.position)} ${formatDistance(obs.approximateDistanceMeters)}"
+                        displayDetail = "Person ${formatDistance(obs.approximateDistanceMeters)}"
                     )
                 } else {
-                    val pos = formatPosition(obs.position)
-                    val spoken = debounceSpoken("Person $pos.", 4000L)
+                    val spoken = debounceSpoken("Pedestrian ahead. Proceed cautiously.", 4000L)
                     ContextEvent(
                         id = obs.id,
                         priority = EventPriority.NORMAL,
                         spokenText = spoken,
                         displayTitle = "Person",
-                        displayDetail = "Person $pos ${formatDistance(obs.approximateDistanceMeters)}"
+                        displayDetail = "Pedestrian ${formatDistance(obs.approximateDistanceMeters)}"
                     )
                 }
             }
@@ -198,36 +196,34 @@ class ContextEngine(
                 ContextEvent(
                     id = audio.id,
                     priority = EventPriority.CRITICAL,
-                    spokenText = "Caution. Urgent alert sound detected.",
+                    spokenText = "Emergency siren nearby. Stop and stand clear.",
                     displayTitle = "Urgent Sound",
                     displayDetail = "${audio.soundType.name} detected"
                 )
             }
             SoundType.VEHICLE_ENGINE -> {
-                val pos = formatPosition(audio.direction)
                 ContextEvent(
                     id = audio.id,
                     priority = EventPriority.HIGH,
-                    spokenText = "Vehicle sound $pos.",
+                    spokenText = "Engine sound nearby. Caution.",
                     displayTitle = "Vehicle Audio",
-                    displayDetail = "Engine sound $pos"
+                    displayDetail = "Engine sound nearby"
                 )
             }
             SoundType.FOOTSTEPS -> {
-                val pos = formatPosition(audio.direction)
                 ContextEvent(
                     id = audio.id,
                     priority = EventPriority.NORMAL,
                     spokenText = null,
                     displayTitle = "Footsteps",
-                    displayDetail = "Footsteps $pos"
+                    displayDetail = "Footsteps nearby"
                 )
             }
             SoundType.ANNOUNCEMENT -> {
                 ContextEvent(
                     id = audio.id,
                     priority = EventPriority.HIGH,
-                    spokenText = "Announcement detected.",
+                    spokenText = "Public announcement sound.",
                     displayTitle = "Announcement",
                     displayDetail = "Public announcement sound"
                 )

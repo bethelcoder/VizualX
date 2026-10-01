@@ -136,7 +136,7 @@ class ContextAwarenessEngine(
             val crowdEvent = ContextEvent(
                 id = "crowd-$now",
                 priority = EventPriority.HIGH,
-                spokenText = "Crowd of pedestrians ahead.",
+                spokenText = "Crowd blocking path. Slow down and wait.",
                 displayTitle = "Crowd Detected",
                 displayDetail = "$personCountInFrame pedestrians in vicinity",
                 timestampMs = now
