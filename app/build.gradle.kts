@@ -49,6 +49,12 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {
@@ -77,6 +83,7 @@ dependencies {
     implementation(libs.mlkit.textrecognition)
     implementation(libs.mlkit.imagelabeling)
     implementation(libs.mediapipe.tasks.vision)
+    implementation(libs.mediapipe.tasks.genai)
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)

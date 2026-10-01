@@ -15,6 +15,7 @@ mlkitObjectDetection = "17.0.2"
 mlkitTextRecognition = "16.0.1"
 mlkitImageLabeling = "17.0.9"
 mediapipeTasksVision = "0.10.14"
+mediapipeTasksGenai = "0.10.14"
 
 playServicesMaps = "19.0.0"
 playServicesLocation = "21.3.0"
@@ -50,6 +51,7 @@ mlkit-objectdetection = { group = "com.google.mlkit", name = "object-detection",
 mlkit-textrecognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitTextRecognition" }
 mlkit-imagelabeling = { group = "com.google.mlkit", name = "image-labeling", version.ref = "mlkitImageLabeling" }
 mediapipe-tasks-vision = { group = "com.google.mediapipe", name = "tasks-vision", version.ref = "mediapipeTasksVision" }
+mediapipe-tasks-genai = { group = "com.google.mediapipe", name = "tasks-genai", version.ref = "mediapipeTasksGenai" }
 
 # Coroutines
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
