@@ -180,9 +180,15 @@ class ObjectAudioBridge(
             return
         }
 
+        val cleanSpeechText = com.vizualx.app.speech.SpeechNormalizer.normalizeForSpeech(text)
+        if (cleanSpeechText.isBlank()) {
+            isSpeakingOrProcessing.set(false)
+            return
+        }
+
         val utteranceId = "$UTTERANCE_PREFIX${UUID.randomUUID()}"
         // QUEUE_FLUSH ensures immediate interruption for safety warnings
-        val result = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+        val result = tts?.speak(cleanSpeechText, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
         if (result != TextToSpeech.SUCCESS) {
             Log.e(TAG, "TTS speak command failed with code: $result")
             isSpeakingOrProcessing.set(false)

@@ -44,7 +44,13 @@ class SpeechManager(
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            tts?.language = Locale.UK // Or Locale.US
+            val result = tts?.setLanguage(Locale.US)
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                tts?.language = Locale.getDefault()
+            }
+            tts?.setSpeechRate(1.05f) // Natural conversational tempo
+            tts?.setPitch(1.0f)
+
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {
                     _assistantState.value = VoiceAssistantState.RESPONDING
@@ -65,15 +71,20 @@ class SpeechManager(
     fun speak(text: String, priority: EventPriority = EventPriority.NORMAL) {
         if (!isTtsReady || text.isBlank()) return
 
+        // 1. Run through SpeechNormalizer to de-acronymize all-caps words, expand abbreviations,
+        // merge spaced OCR letters, and remove OCR noise artifacts.
+        val cleanSpeechText = SpeechNormalizer.normalizeForSpeech(text)
+        if (cleanSpeechText.isBlank()) return
+
         val queueMode = if (priority == EventPriority.CRITICAL) {
             TextToSpeech.QUEUE_FLUSH // Immediately interrupt current speech for critical hazards
         } else {
             TextToSpeech.QUEUE_ADD
         }
 
-        _lastSpoken.value = text
+        _lastSpoken.value = cleanSpeechText
         val utteranceId = UUID.randomUUID().toString()
-        tts?.speak(text, queueMode, null, utteranceId)
+        tts?.speak(cleanSpeechText, queueMode, null, utteranceId)
     }
 
     fun startListening() {

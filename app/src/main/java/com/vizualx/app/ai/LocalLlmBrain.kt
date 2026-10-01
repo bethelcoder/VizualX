@@ -118,6 +118,11 @@ class LocalLlmBrain(
                     "Obstacle ahead. Proceed cautiously."
             }
         }
+        /**
+         * Reading comprehension prompt template for converting raw OCR tokens into fluent spoken sentences.
+         */
+        const val READING_PROMPT_TEMPLATE =
+            "You are an assistive vision companion for a blind person. The camera OCR detected this text: '%s'. Convert this into fluent, natural spoken English in 1 or 2 concise sentences. Pronounce all words normally and never spell out letters. If it is a sign, state what it indicates clearly."
     }
 
     private var llmInference: LlmInference? = null
@@ -226,6 +231,30 @@ class LocalLlmBrain(
 
         // Deterministic on-device rule fallback if model binary is not loaded or fails
         return@withContext generateDeterministicFallback(objects)
+    }
+
+    /**
+     * Synthesizes raw OCR text into fluent, human-like natural spoken English.
+     */
+    suspend fun synthesizeReading(rawOcrText: String): String = withContext(Dispatchers.Default) {
+        val normalized = com.vizualx.app.speech.SpeechNormalizer.normalizeForSpeech(rawOcrText)
+        if (normalized.isBlank()) return@withContext ""
+
+        val engine = llmInference
+        if (engine != null && isModelReady) {
+            try {
+                val prompt = String.format(Locale.US, READING_PROMPT_TEMPLATE, normalized)
+                val rawResponse = engine.generateResponse(prompt)
+                val clean = rawResponse.trim().replace("\"", "").replace("\n", " ").trim()
+                if (clean.isNotBlank()) {
+                    return@withContext com.vizualx.app.speech.SpeechNormalizer.normalizeForSpeech(clean)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error executing LLM reading synthesis: ${e.message}", e)
+            }
+        }
+
+        return@withContext normalized
     }
 
     override fun close() {

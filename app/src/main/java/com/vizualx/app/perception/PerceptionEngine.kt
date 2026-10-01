@@ -60,6 +60,10 @@ class PerceptionEngine(
     // Dedicated Assistive Reading Engine for full document & sign reading
     val readingEngine = com.vizualx.app.perception.reading.AssistiveReadingEngine()
 
+    // Local LLM Auditory & Reading Brain
+    var localLlmBrain: com.vizualx.app.ai.LocalLlmBrain? = null
+        private set
+
     @Volatile
     var latestBitmap: android.graphics.Bitmap? = null
         private set
@@ -69,6 +73,7 @@ class PerceptionEngine(
 
     init {
         if (context != null) {
+            localLlmBrain = com.vizualx.app.ai.LocalLlmBrain(context)
             mediaPipeHelper = MediaPipeObjectDetectorHelper(
                 context = context,
                 threshold = 0.40f,
@@ -120,10 +125,14 @@ class PerceptionEngine(
 
     /**
      * Reads text in front of the camera on demand for assistive document/sign reading.
+     * Uses on-device LocalLlmBrain (Gemma/Phi-3) or SpeechNormalizer to speak fluent words instead of spelling letters.
      */
     suspend fun readAloudCurrentView(): String {
         val bmp = latestBitmap ?: return "Camera feed warming up. Please hold steady and try again in a moment."
-        return readingEngine.readTextFromBitmap(bmp, latestRotationDegrees)
+        return readingEngine.readTextFromBitmap(bmp, latestRotationDegrees) { rawText ->
+            localLlmBrain?.synthesizeReading(rawText)
+                ?: com.vizualx.app.speech.SpeechNormalizer.normalizeForSpeech(rawText)
+        }
     }
 
     private fun handleSceneInsight(insight: SceneInsight, source: ObservationSource) {
@@ -176,6 +185,8 @@ class PerceptionEngine(
     fun close() {
         mediaPipeHelper?.close()
         sceneHelper.close()
+        readingEngine.close()
+        localLlmBrain?.close()
     }
 
     // Diagnostic & simulation helpers for testing and demonstration

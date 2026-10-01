@@ -48,7 +48,11 @@ class AssistiveReadingEngine(
     /**
      * Analyzes an in-memory Bitmap and extracts structured, formatted text in natural reading order.
      */
-    suspend fun readTextFromBitmap(bitmap: Bitmap, rotationDegrees: Int = 0): String = withContext(Dispatchers.Default) {
+    suspend fun readTextFromBitmap(
+        bitmap: Bitmap,
+        rotationDegrees: Int = 0,
+        synthesizer: (suspend (String) -> String)? = null
+    ): String = withContext(Dispatchers.Default) {
         val inputImage = InputImage.fromBitmap(bitmap, rotationDegrees)
         _isReading.value = true
 
@@ -56,14 +60,25 @@ class AssistiveReadingEngine(
             val textResult = recognizeText(inputImage)
             val extractedText = formatTextBlocks(textResult)
 
-            _lastReadText.value = extractedText
-            _isReading.value = false
-
             if (extractedText.isBlank()) {
-                "No readable text detected in front of the camera."
-            } else {
-                extractedText
+                _isReading.value = false
+                return@withContext "No readable text detected in front of the camera."
             }
+
+            val finalSpoken = if (synthesizer != null) {
+                try {
+                    synthesizer(extractedText)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Synthesizer fallback: ${e.message}")
+                    com.vizualx.app.speech.SpeechNormalizer.normalizeForSpeech(extractedText)
+                }
+            } else {
+                com.vizualx.app.speech.SpeechNormalizer.normalizeForSpeech(extractedText)
+            }
+
+            _lastReadText.value = finalSpoken
+            _isReading.value = false
+            finalSpoken
         } catch (e: Exception) {
             Log.e(TAG, "Error in Assistive Reading OCR: ${e.message}", e)
             _isReading.value = false
@@ -85,7 +100,7 @@ class AssistiveReadingEngine(
      */
     internal fun formatTextBlocks(text: Text): String {
         if (text.textBlocks.isEmpty()) {
-            return text.text.trim()
+            return com.vizualx.app.speech.SpeechNormalizer.normalizeForSpeech(text.text)
         }
 
         // Sort text blocks by top coordinate, then left coordinate
@@ -101,7 +116,8 @@ class AssistiveReadingEngine(
             }
         }
 
-        return paragraphs.joinToString(". ").replace(Regex("\\s+"), " ").trim()
+        val joined = paragraphs.joinToString(". ").replace(Regex("\\s+"), " ").trim()
+        return com.vizualx.app.speech.SpeechNormalizer.normalizeForSpeech(joined)
     }
 
     override fun close() {

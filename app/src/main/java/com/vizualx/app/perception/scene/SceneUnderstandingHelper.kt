@@ -107,16 +107,18 @@ class SceneUnderstandingHelper {
                 val fullText = textResult.text.trim().replace("\n", " ")
                 // Filter out single character noise, ensure text has at least 3 characters and real words
                 if (fullText.length in 3..120 && fullText.any { it.isLetter() }) {
-                    val cleanText = fullText.replace(Regex("\\s+"), " ").trim()
+                    val cleanText = com.vizualx.app.speech.SpeechNormalizer.normalizeForSpeech(fullText)
                     
-                    onSceneInsight(
-                        SceneInsight(
-                            detectedType = ObjectType.SIGN,
-                            label = "Sign: $cleanText",
-                            confidence = 0.90f,
-                            detectedText = cleanText
+                    if (cleanText.isNotBlank()) {
+                        onSceneInsight(
+                            SceneInsight(
+                                detectedType = ObjectType.SIGN,
+                                label = "Sign: $cleanText",
+                                confidence = 0.90f,
+                                detectedText = cleanText
+                            )
                         )
-                    )
+                    }
                 }
             }
             .addOnFailureListener { e ->
