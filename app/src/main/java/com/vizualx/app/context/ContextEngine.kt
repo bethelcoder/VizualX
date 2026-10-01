@@ -169,12 +169,14 @@ class ContextEngine(
                 }
             }
             ObjectType.SIGN -> {
+                val signText = obs.label.removePrefix("Sign: ").trim()
+                val spoken = debounceSpoken("Sign ahead: $signText.", 6000L)
                 ContextEvent(
                     id = obs.id,
-                    priority = EventPriority.NORMAL,
-                    spokenText = null, // don't read every sign aloud unless queried
-                    displayTitle = "Sign",
-                    displayDetail = obs.label
+                    priority = EventPriority.HIGH,
+                    spokenText = spoken,
+                    displayTitle = "Sign Detected",
+                    displayDetail = signText
                 )
             }
             ObjectType.TREE, ObjectType.BENCH, ObjectType.UNKNOWN -> {

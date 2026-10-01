@@ -101,29 +101,22 @@ class SceneUnderstandingHelper {
                 Log.w(TAG, "ML Kit labeler error: ${e.message}")
             }
 
-        // 2. Process Text Recognition for Campus Signs / Door Plaques / Room numbers
+        // 2. Process Text Recognition for Campus Signs / Door Plaques / Room numbers / Documents
         textRecognizer.process(inputImage)
             .addOnSuccessListener { textResult ->
                 val fullText = textResult.text.trim().replace("\n", " ")
-                if (fullText.length in 3..50) {
-                    val upper = fullText.uppercase()
-                    if (upper.contains("EXIT") || upper.contains("STAIR") || upper.contains("ENTRANCE") || 
-                        upper.contains("ROOM") || upper.contains("LAB") || upper.contains("LIBRARY") || 
-                        upper.contains("OFFICE") || upper.contains("RESTROOM") || upper.contains("CAFE") || 
-                        upper.contains("EMERGENCY") || upper.contains("PULL") || upper.contains("PUSH") ||
-                        upper.contains("NO ENTRY") || upper.contains("CAUTION") || upper.contains("DANGER") ||
-                        upper.contains("ELEVATOR") || upper.contains("FLOOR") || upper.contains("LEVEL") ||
-                        upper.contains("HALL") || upper.contains("BUILDING") || upper.contains("WAY OUT")) {
-                        
-                        onSceneInsight(
-                            SceneInsight(
-                                detectedType = ObjectType.SIGN,
-                                label = "Sign: $fullText",
-                                confidence = 0.88f,
-                                detectedText = fullText
-                            )
+                // Filter out single character noise, ensure text has at least 3 characters and real words
+                if (fullText.length in 3..120 && fullText.any { it.isLetter() }) {
+                    val cleanText = fullText.replace(Regex("\\s+"), " ").trim()
+                    
+                    onSceneInsight(
+                        SceneInsight(
+                            detectedType = ObjectType.SIGN,
+                            label = "Sign: $cleanText",
+                            confidence = 0.90f,
+                            detectedText = cleanText
                         )
-                    }
+                    )
                 }
             }
             .addOnFailureListener { e ->

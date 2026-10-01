@@ -6,6 +6,7 @@ import com.vizualx.app.perception.models.ObjectObservation
 sealed class AIQueryResult {
     data class TextResponse(val text: String) : AIQueryResult()
     data class NavigationRequest(val destinationQuery: String) : AIQueryResult()
+    data object TriggerAssistiveReading : AIQueryResult()
 }
 
 class AIOrchestrator(
@@ -14,6 +15,14 @@ class AIOrchestrator(
 
     suspend fun processQuery(query: String): AIQueryResult {
         val lower = query.lowercase().trim()
+
+        if (lower.contains("read this") || lower.contains("read text") || 
+            lower.contains("read document") || lower.contains("what does this say") ||
+            lower.contains("read sign") || lower.contains("read page") ||
+            lower.contains("start reading") || lower.contains("assistive reading") ||
+            lower.contains("read out") || lower.contains("read menu")) {
+            return AIQueryResult.TriggerAssistiveReading
+        }
 
         if (lower.startsWith("navigate to") ||
             lower.startsWith("take me to") ||

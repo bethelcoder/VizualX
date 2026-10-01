@@ -85,6 +85,11 @@ class MainActivity : ComponentActivity() {
         speechManager = SpeechManager(this) { userQuery ->
             lifecycleScope.launch {
                 when (val result = aiOrchestrator.processQuery(userQuery)) {
+                    is AIQueryResult.TriggerAssistiveReading -> {
+                        speechManager.speak("Reading text in front of you.", EventPriority.HIGH)
+                        val text = perceptionEngine.readAloudCurrentView()
+                        speechManager.speak(text, EventPriority.CRITICAL)
+                    }
                     is AIQueryResult.TextResponse -> {
                         speechManager.speak(result.text, EventPriority.HIGH)
                     }
@@ -133,20 +138,15 @@ class MainActivity : ComponentActivity() {
                             startAutomatedStartupSequence()
                         }
                     },
-                    cameraMode = activeCameraMode,
                     assistantStateFlow = speechManager.assistantState,
                     lastSpokenFlow = speechManager.lastSpoken,
-                    audioDbFlow = audioCapture.amplitudeFlow,
-                    recentEvents = recentEvents,
-                    capabilityReport = capabilityReport,
                     navigationManager = navigationManager,
-                    onSimulate = { type, pos, dist, label ->
-                        perceptionEngine.simulateObservation(
-                            type = type,
-                            position = pos,
-                            distanceMeters = dist,
-                            label = label
-                        )
+                    onTriggerAssistiveReading = {
+                        lifecycleScope.launch {
+                            speechManager.speak("Reading text in front of you.", EventPriority.HIGH)
+                            val text = perceptionEngine.readAloudCurrentView()
+                            speechManager.speak(text, EventPriority.CRITICAL)
+                        }
                     },
                     onVoiceQueryClick = {
                         speechManager.startListening()

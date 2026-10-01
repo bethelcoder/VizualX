@@ -57,6 +57,16 @@ class PerceptionEngine(
     // Scene Understanding Helper (ML Kit Image Labeling for Doors/Stairs + Text OCR)
     private val sceneHelper = SceneUnderstandingHelper()
 
+    // Dedicated Assistive Reading Engine for full document & sign reading
+    val readingEngine = com.vizualx.app.perception.reading.AssistiveReadingEngine()
+
+    @Volatile
+    var latestBitmap: android.graphics.Bitmap? = null
+        private set
+    @Volatile
+    var latestRotationDegrees: Int = 0
+        private set
+
     init {
         if (context != null) {
             mediaPipeHelper = MediaPipeObjectDetectorHelper(
@@ -88,6 +98,8 @@ class PerceptionEngine(
             val rotation = imageProxy.imageInfo.rotationDegrees
             // Convert to standalone in-memory Bitmap synchronously so ImageProxy can be safely closed
             val bitmap = imageProxy.toBitmap()
+            latestBitmap = bitmap
+            latestRotationDegrees = rotation
 
             // 1. Run Scene Understanding (Doors, Stairs, Signs)
             val inputImage = InputImage.fromBitmap(bitmap, rotation)
@@ -104,6 +116,14 @@ class PerceptionEngine(
         } catch (e: Exception) {
             Log.e("PerceptionEngine", "Error processing camera frame: ${e.message}")
         }
+    }
+
+    /**
+     * Reads text in front of the camera on demand for assistive document/sign reading.
+     */
+    suspend fun readAloudCurrentView(): String {
+        val bmp = latestBitmap ?: return "Camera feed warming up. Please hold steady and try again in a moment."
+        return readingEngine.readTextFromBitmap(bmp, latestRotationDegrees)
     }
 
     private fun handleSceneInsight(insight: SceneInsight, source: ObservationSource) {
